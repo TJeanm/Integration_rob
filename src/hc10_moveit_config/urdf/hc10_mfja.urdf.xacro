@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="yaskawa_hc10">
+  <material name="yaskawa_blue"><color rgba="0.10 0.22 0.62 1"/></material>
+
+  <xacro:macro name="mesh_link" params="name mesh">
+    <link name="${name}">
+      <visual><geometry><mesh filename="package://motoman_hc10_support/meshes/hc10/visual/${mesh}.dae"/></geometry><material name="yaskawa_blue"/></visual>
+      <collision><geometry><mesh filename="package://motoman_hc10_support/meshes/hc10/collision/${mesh}.stl"/></geometry></collision>
+    </link>
+  </xacro:macro>
+  <xacro:macro name="arm_joint" params="name parent child xyz axis lower upper effort velocity">
+    <joint name="${name}" type="revolute">
+      <origin xyz="${xyz}" rpy="0 0 0"/><parent link="${parent}"/><child link="${child}"/>
+      <axis xyz="${axis}"/><limit lower="${lower}" upper="${upper}" effort="${effort}" velocity="${velocity}"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:mesh_link name="base_link" mesh="base_link"/>
+  <xacro:mesh_link name="link_1_s" mesh="link_1"/>
+  <xacro:mesh_link name="link_2_l" mesh="link_2"/>
+  <xacro:mesh_link name="link_3_u" mesh="link_3"/>
+  <xacro:mesh_link name="link_4_r" mesh="link_4"/>
+  <xacro:mesh_link name="link_5_b" mesh="link_5"/>
+  <xacro:mesh_link name="link_6_t" mesh="link_6"/>
+
+  <xacro:arm_joint name="joint_1_s" parent="base_link" child="link_1_s" xyz="0 0 0.275" axis="0 0 1" lower="-${pi}" upper="${pi}" effort="368.48" velocity="2.26892802759"/>
+  <xacro:arm_joint name="joint_2_l" parent="link_1_s" child="link_2_l" xyz="0 0 0" axis="0 1 0" lower="-${pi}" upper="${pi}" effort="368.48" velocity="2.26892802759"/>
+  <xacro:arm_joint name="joint_3_u" parent="link_2_l" child="link_3_u" xyz="0 0 0.700" axis="0 -1 0" lower="-0.08726646260" upper="6.19591884458" effort="141.12" velocity="3.14159265359"/>
+  <xacro:arm_joint name="joint_4_r" parent="link_3_u" child="link_4_r" xyz="0 0 -0.500" axis="0 0 1" lower="-${pi}" upper="${pi}" effort="39.20" velocity="3.14159265359"/>
+  <xacro:arm_joint name="joint_5_b" parent="link_4_r" child="link_5_b" xyz="0 0.162 0" axis="0 -1 0" lower="-${pi}" upper="${pi}" effort="31.36" velocity="4.36332312999"/>
+  <xacro:arm_joint name="joint_6_t" parent="link_5_b" child="link_6_t" xyz="0 0 0" axis="0 0 1" lower="-${pi}" upper="${pi}" effort="31.36" velocity="4.36332312999"/>
+
+  <link name="tool0"/>
+  <joint name="joint_6_t-tool0" type="fixed"><origin xyz="0 0 -0.130" rpy="${pi} 0 0"/><parent link="link_6_t"/><child link="tool0"/></joint>
+  <link name="gripper"><visual><origin xyz="0 0 0.024"/><geometry><box size="0.090 0.078 0.048"/></geometry></visual><collision><origin xyz="0 0 0.024"/><geometry><box size="0.090 0.078 0.048"/></geometry></collision></link>
+  <joint name="tool0-gripper" type="fixed"><parent link="tool0"/><child link="gripper"/></joint>
+  <link name="gripper_tcp"/>
+  <joint name="gripper_tcp_joint" type="fixed"><origin xyz="0 0 0.1182"/><parent link="gripper"/><child link="gripper_tcp"/></joint>
+  <link name="base"/>
+  <joint name="base_link-base" type="fixed"><origin xyz="0 0 0.275"/><parent link="base_link"/><child link="base"/></joint>
+</robot>

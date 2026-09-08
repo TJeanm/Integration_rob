@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>hc10_moveit_config</name>
+  <version>0.1.0</version>
+  <description>MoveIt 2 configuration matching the MFJA simulated Yaskawa HC10.</description>
+  <maintainer email="maintainer@example.com">MFJA</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <exec_depend>hc10_mfja_control_adapter</exec_depend>
+  <exec_depend>mfja_3rd_floor_bringup</exec_depend>
+  <exec_depend>motoman_hc10_support</exec_depend>
+  <exec_depend>moveit_configs_utils</exec_depend>
+  <exec_depend>moveit_ros_move_group</exec_depend>
+  <exec_depend>moveit_ros_visualization</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>
