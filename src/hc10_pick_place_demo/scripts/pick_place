@@ -22,6 +22,7 @@ from moveit_msgs.srv import GetPlanningScene
 from moveit_msgs.msg import PlanningSceneComponents
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64
+from std_srvs.srv import Empty
 from trajectory_msgs.msg import JointTrajectory
 from shape_msgs.msg import SolidPrimitive
 
@@ -45,6 +46,7 @@ class Demo(Node):
         self.last_tcp_xyz = None
         self.execution = ActionClient(self, ExecuteTrajectory, '/execute_trajectory')
         self.scene = self.create_client(GetPlanningScene, '/get_planning_scene')
+        self.clear_octomap_client = self.create_client(Empty, '/clear_octomap')
         self.arm = self.create_publisher(
             JointTrajectory, '/yaskawa_hc10_1/joint_trajectory', 1
         )
@@ -71,13 +73,39 @@ class Demo(Node):
                 self.fk_client.service_is_ready(),
                 self.plan_client.service_is_ready(),
                 self.cartesian_client.service_is_ready(),
+                self.clear_octomap_client.service_is_ready(),
             )
             if all(status):
                 return
         raise RuntimeError(
-            'Dépendances indisponibles [joints, contrôleur, IK, FK, OMPL, cartésien] '
+            'Dépendances indisponibles '
+            '[joints, contrôleur, IK, FK, OMPL, cartésien, clear_octomap] '
             f'= {status}'
         )
+
+    def rebuild_octomap(self):
+        """Discard voxels left by the previous cycle and wait for fresh RGB-D data."""
+        future = self.clear_octomap_client.call_async(Empty.Request())
+        rclpy.spin_until_future_complete(self, future, timeout_sec=5)
+        if not future.done() or future.result() is None:
+            raise RuntimeError("Impossible de vider l'OctoMap avant le cycle")
+        print("Ancienne OctoMap vidée; reconstruction depuis la caméra...", flush=True)
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            rclpy.spin_once(self, timeout_sec=0.1)
+            request = GetPlanningScene.Request()
+            request.components.components = PlanningSceneComponents.OCTOMAP
+            scene_future = self.scene.call_async(request)
+            rclpy.spin_until_future_complete(self, scene_future, timeout_sec=1)
+            response = scene_future.result() if scene_future.done() else None
+            if response is not None and response.scene.world.octomap.octomap.data:
+                print(
+                    f"OctoMap reconstruite: "
+                    f"{len(response.scene.world.octomap.octomap.data)} octets",
+                    flush=True,
+                )
+                return
+        raise RuntimeError("OctoMap non reconstruite après vidage : vérifier perception.sh")
 
     def start_positions(self):
         if self.planning_positions is not None:
@@ -325,6 +353,7 @@ rclpy.init()
 print('Démo HC10 version 2026-09-10-IK2 (IK verticale + OctoMap OMPL)', flush=True)
 demo = Demo()
 demo.ready()
+demo.rebuild_octomap()
 demo.require_octomap()
 point_a = (PICK_POSITION[0], PICK_POSITION[1], PICK_POSITION[2] + PICK_CLEARANCE)
 point_b = (CONVEYOR[0], CONVEYOR[1], CONVEYOR[2] + CONVEYOR_CLEARANCE)
