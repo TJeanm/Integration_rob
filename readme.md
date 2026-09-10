@@ -128,6 +128,38 @@ cloné ailleurs que dans `~/Desktop` et utilisé par n'importe quel utilisateur.
 
 ## Lancement — quatre terminaux
 
+### Lancement entièrement automatique
+
+La méthode la plus simple consiste à exécuter :
+
+```bash
+./auto_start.sh
+```
+
+Ce script recherche automatiquement ROS 2 et les paquets Room 315 dans le
+dossier personnel. Il utilise un underlay déjà compilé lorsqu'il en trouve un.
+Sinon, il recherche les sources MFJA, les compile automatiquement ou les clone
+depuis GitHub si elles sont absentes. Il compile ensuite ce dépôt et ouvre les
+quatre terminaux dans le bon ordre.
+
+Le script ne passe à l'étape suivante qu'après avoir reçu un vrai message de
+la caméra, un vrai nuage filtré, puis les services MoveIt. Il indique donc
+directement l'étape responsable si le nuage de points est absent.
+
+Pour uniquement détecter les fichiers, installer les dépendances et compiler :
+
+```bash
+AUTO_SETUP_ONLY=1 ./auto_start.sh
+```
+
+Pour préparer Gazebo, la perception et RViz sans lancer le mouvement :
+
+```bash
+AUTO_RUN_DEMO=0 ./auto_start.sh
+```
+
+### Lancement manuel
+
 Ouvrir quatre terminaux dans le dossier `Integration_rob`. Si
 `MFJA_UNDERLAY` n'est pas enregistré dans `~/.bashrc`, l'exporter dans chaque
 terminal avant la commande.

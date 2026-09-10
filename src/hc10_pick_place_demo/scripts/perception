@@ -4,6 +4,7 @@
 import numpy as np
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
 
@@ -21,7 +22,8 @@ class Perception(Node):
         self.collision_pub = self.create_publisher(PointCloud2, '/hc10/collision_cloud', 1)
         self.camera_pub = self.create_publisher(PointCloud2, '/hc10/right_camera_cloud', 1)
         self.subscription = self.create_subscription(
-            PointCloud2, '/room_315/perception/right_rail_rgbd/points', self.cloud, 1
+            PointCloud2, '/room_315/perception/right_rail_rgbd/points', self.cloud,
+            qos_profile_sensor_data
         )
 
     def cloud(self, msg):
