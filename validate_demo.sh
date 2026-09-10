@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 set -e
-cd "$(dirname "$0")"
+script_dir=$(cd "$(dirname "$0")" && pwd)
 export HC10_DRY_RUN=1
-exec ./demo.sh
+exec "$script_dir/demo.sh"

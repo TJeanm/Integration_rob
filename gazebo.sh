@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 set -e
-cd "$(dirname "$0")"
-source /opt/ros/jazzy/setup.bash
-source /home/mfja/Desktop/hc10_ros2_ws/install/setup.bash
-source install/setup.bash
+script_dir=$(cd "$(dirname "$0")" && pwd)
+source "$script_dir/setup_env.sh"
+cd "$INTEGRATION_ROB_ROOT"
+if ! ros2 pkg prefix mfja_3rd_floor_bringup >/dev/null 2>&1; then
+  echo "Paquet mfja_3rd_floor_bringup introuvable." >&2
+  echo "Définir MFJA_UNDERLAY=/chemin/vers/le/workspace/install" >&2
+  exit 1
+fi
 export GZ_PARTITION=mfja_pick_place
 # Keep Gazebo Transport on the VM loopback interface. Multicast discovery on
 # the VMware adapter can leave the GUI connected to no scene (uniform grey).

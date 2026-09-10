@@ -150,15 +150,30 @@ Le lancement utilise quatre terminaux ouverts dans le dossier du dépôt. Les
 scripts arrêtent automatiquement leurs anciennes instances afin d'éviter les
 serveurs Gazebo, MoveIt ou nœuds de perception en double.
 
-Préparer le workspace une fois :
+Préparer le workspace une fois, quel que soit le dossier dans lequel le dépôt
+a été cloné :
 
 ```bash
+source /opt/ros/jazzy/setup.bash
 colcon build --symlink-install
 source install/setup.bash
 ```
 
-Ouvrir ensuite quatre terminaux dans `~/Desktop/Integration_rob` et exécuter
-les commandes suivantes dans cet ordre :
+Les paquets de la Room 315 viennent du workspace externe
+`mfja_3rd_floor_gz`. Si son dossier `install` n'est pas situé à côté de ce
+dépôt sous le nom `hc10_ros2_ws/install` ou `mfja_3rd_floor_gz/install`,
+indiquer son emplacement avant les lancements :
+
+```bash
+export MFJA_UNDERLAY=/chemin/vers/le/workspace_mfja/install
+```
+
+Cette variable peut être ajoutée au `~/.bashrc`. Aucun script ne dépend d'un
+nom d'utilisateur ni du dossier `Desktop`.
+
+Ouvrir ensuite quatre terminaux dans le dossier cloné et exécuter les
+commandes suivantes dans cet ordre. Répéter l'export `MFJA_UNDERLAY` dans
+chaque terminal s'il n'est pas défini dans le `~/.bashrc` :
 
 Terminal 1 — simulation Gazebo :
 
