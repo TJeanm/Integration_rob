@@ -152,3 +152,31 @@ colcon build --symlink-install
 
 source install/setup.bash
 
+
+## HC10 tool pose goal
+
+After building and sourcing the workspace, use:
+
+```bash
+./demo_pose.sh x y z roll pitch yaw
+```
+
+Replace the six arguments with numbers: XYZ in metres and fixed-axis roll,
+pitch, yaw in radians. The target is `tool0` expressed in `base_link`, not
+in Gazebo world coordinates. MoveIt uses the configured KDL solver for IK
+and plans a joint-space motion; the tool path is not necessarily straight.
+Unreachable or colliding targets can fail planning.
+
+For example (reachability must be checked by MoveIt):
+
+```bash
+./demo_pose.sh 0.4 0.1 0.5 3.14159 0 0
+```
+
+If the simulation, adapter, joint-state relay and MoveIt are already running:
+
+```bash
+ros2 run hc10_moveit_api pose_goal 0.4 0.1 0.5 3.14159 0 0
+```
+
+The existing `./demo.sh j1 j2 j3 j4 j5 j6` joint command is unchanged.

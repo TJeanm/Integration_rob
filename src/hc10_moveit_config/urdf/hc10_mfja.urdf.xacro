@@ -4,8 +4,8 @@
 
   <xacro:macro name="mesh_link" params="name mesh">
     <link name="${name}">
-      <visual><geometry><mesh filename="package://motoman_hc10_support/meshes/hc10/visual/${mesh}.dae"/></geometry><material name="yaskawa_blue"/></visual>
-      <collision><geometry><mesh filename="package://motoman_hc10_support/meshes/hc10/collision/${mesh}.stl"/></geometry></collision>
+      <visual><geometry><mesh filename="package://mfja_3rd_floor_description/models/yaskawa_hc10/meshes/hc10/visual/${mesh}.dae"/></geometry><material name="yaskawa_blue"/></visual>
+      <collision><geometry><mesh filename="package://mfja_3rd_floor_description/models/yaskawa_hc10/meshes/hc10/collision/${mesh}.stl"/></geometry></collision>
     </link>
   </xacro:macro>
   <xacro:macro name="arm_joint" params="name parent child xyz axis lower upper effort velocity">
@@ -16,12 +16,12 @@
   </xacro:macro>
 
   <xacro:mesh_link name="base_link" mesh="base_link"/>
-  <xacro:mesh_link name="link_1_s" mesh="link_1"/>
-  <xacro:mesh_link name="link_2_l" mesh="link_2"/>
-  <xacro:mesh_link name="link_3_u" mesh="link_3"/>
-  <xacro:mesh_link name="link_4_r" mesh="link_4"/>
-  <xacro:mesh_link name="link_5_b" mesh="link_5"/>
-  <xacro:mesh_link name="link_6_t" mesh="link_6"/>
+  <xacro:mesh_link name="link_1_s" mesh="link_1_s"/>
+  <xacro:mesh_link name="link_2_l" mesh="link_2_l"/>
+  <xacro:mesh_link name="link_3_u" mesh="link_3_u"/>
+  <xacro:mesh_link name="link_4_r" mesh="link_4_r"/>
+  <xacro:mesh_link name="link_5_b" mesh="link_5_b"/>
+  <xacro:mesh_link name="link_6_t" mesh="link_6_t"/>
 
   <xacro:arm_joint name="joint_1_s" parent="base_link" child="link_1_s" xyz="0 0 0.275" axis="0 0 1" lower="-${pi}" upper="${pi}" effort="368.48" velocity="2.26892802759"/>
   <xacro:arm_joint name="joint_2_l" parent="link_1_s" child="link_2_l" xyz="0 0 0" axis="0 1 0" lower="-${pi}" upper="${pi}" effort="368.48" velocity="2.26892802759"/>

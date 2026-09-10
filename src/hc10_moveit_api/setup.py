@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
 		'joint_goal = hc10_moveit_api.joint_goal:main',
+        'pose_goal = hc10_moveit_api.pose_goal:main',
         ],
     },
 )

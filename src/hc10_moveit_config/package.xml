@@ -8,7 +8,7 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
   <exec_depend>hc10_mfja_control_adapter</exec_depend>
   <exec_depend>mfja_3rd_floor_bringup</exec_depend>
-  <exec_depend>motoman_hc10_support</exec_depend>
+  <exec_depend>mfja_3rd_floor_description</exec_depend>
   <exec_depend>moveit_configs_utils</exec_depend>
   <exec_depend>moveit_ros_move_group</exec_depend>
   <exec_depend>moveit_ros_visualization</exec_depend>

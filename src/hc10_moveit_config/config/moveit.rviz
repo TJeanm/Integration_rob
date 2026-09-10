@@ -17,7 +17,30 @@ Visualization Manager:
         Trajectory Topic: /display_planned_path
       Planning Scene Topic: /monitored_planning_scene
       Robot Description: robot_description
+      Planning Request:
+        Planning Group: manipulator
+      Scene Robot:
+        Robot Alpha: 1
+        Show Robot Visual: true
       Value: true
 
   Global Options:
     Background Color: 48; 48; 48
+    Fixed Frame: base_link
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 2.5
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0.5
+      Name: Current View
+      Pitch: 0.4
+      Target Frame: base_link
+      Yaw: 0.8
