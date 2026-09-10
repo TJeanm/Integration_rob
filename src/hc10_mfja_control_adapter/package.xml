@@ -5,11 +5,10 @@
   <description>FollowJointTrajectory adapter for the MFJA HC10 Gazebo interface.</description>
   <maintainer email="maintainer@example.com">MFJA</maintainer>
   <license>Apache-2.0</license>
-  <buildtool_depend>ament_python</buildtool_depend>
+  <buildtool_depend>python3-setuptools</buildtool_depend>
   <exec_depend>control_msgs</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>trajectory_msgs</exec_depend>
-  <test_depend>ament_pytest</test_depend>
   <export><build_type>ament_python</build_type></export>
 </package>

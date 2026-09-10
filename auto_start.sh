@@ -5,6 +5,7 @@ repo_dir=$(cd "$(dirname "$0")" && pwd)
 ros_distro=${ROS_DISTRO:-jazzy}
 ros_setup="/opt/ros/${ros_distro}/setup.bash"
 cache_root="${XDG_CACHE_HOME:-$HOME/.cache}/integration_rob"
+log_dir="$repo_dir/.auto_start_logs"
 mfja_repo_url="https://github.com/aip-primeca-occitanie/mfja_3rd_floor_gz.git"
 mfja_branch="INTERNSHIP-ALI-2026"
 
@@ -99,12 +100,16 @@ if [[ "${AUTO_SETUP_ONLY:-0}" == "1" ]]; then
   exit 0
 fi
 
+mkdir -p "$log_dir"
+
 launch_terminal() {
   local title=$1
   local script=$2
+  local log_file=$3
   local command
-  printf -v command 'export MFJA_UNDERLAY=%q; cd %q; %q; code=$?; echo; echo "Processus terminé (code $code)"; exec bash' \
-    "$underlay" "$repo_dir" "$script"
+  : > "$log_file"
+  printf -v command 'set -o pipefail; export MFJA_UNDERLAY=%q; cd %q; %q 2>&1 | tee %q; code=${PIPESTATUS[0]}; echo; echo "Processus terminé (code $code)" | tee -a %q; exec bash' \
+    "$underlay" "$repo_dir" "$script" "$log_file" "$log_file"
   if command -v gnome-terminal >/dev/null; then
     gnome-terminal --title="$title" -- bash -lc "$command"
   elif command -v x-terminal-emulator >/dev/null; then
@@ -165,20 +170,29 @@ wait_for_service() {
   fail "service indisponible après ${timeout_seconds}s: $service"
 }
 
-launch_terminal "1 - Gazebo Room 315" "$repo_dir/gazebo.sh"
-wait_for_message /room_315/perception/right_rail_rgbd/points 90 \
-  || fail "la caméra Gazebo ne publie pas; consulter le terminal 1"
+gazebo_log="$log_dir/gazebo.log"
+perception_log="$log_dir/perception.log"
+moveit_log="$log_dir/moveit.log"
+demo_log="$log_dir/demo.log"
 
-launch_terminal "2 - Perception RGB-D" "$repo_dir/perception.sh"
-wait_for_message /hc10/collision_cloud 30 \
-  || fail "la perception ne publie pas le nuage filtré; consulter le terminal 2"
+launch_terminal "1 - Gazebo Room 315" "$repo_dir/gazebo.sh" "$gazebo_log"
+if ! wait_for_message /room_315/perception/right_rail_rgbd/points 90; then
+  tail -n 80 "$gazebo_log" >&2
+  fail "la caméra Gazebo ne publie pas; journal: $gazebo_log"
+fi
 
-launch_terminal "3 - MoveIt 2 et RViz" "$repo_dir/moveit_rviz.sh"
+launch_terminal "2 - Perception RGB-D" "$repo_dir/perception.sh" "$perception_log"
+if ! wait_for_message /hc10/collision_cloud 60; then
+  tail -n 80 "$perception_log" >&2
+  fail "la perception ne publie pas le nuage filtré; journal: $perception_log"
+fi
+
+launch_terminal "3 - MoveIt 2 et RViz" "$repo_dir/moveit_rviz.sh" "$moveit_log"
 wait_for_service /compute_ik 60
 wait_for_service /get_planning_scene 60
 
 if [[ "${AUTO_RUN_DEMO:-1}" == "1" ]]; then
-  launch_terminal "4 - Démonstration HC10" "$repo_dir/demo.sh"
+  launch_terminal "4 - Démonstration HC10" "$repo_dir/demo.sh" "$demo_log"
   echo "Les quatre composants sont lancés."
 else
   echo "Gazebo, perception et MoveIt/RViz sont prêts."

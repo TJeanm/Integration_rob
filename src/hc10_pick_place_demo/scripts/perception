@@ -19,6 +19,8 @@ class Perception(Node):
         super().__init__('hc10_room315_perception')
         self.last_input_ns = 0
         self.last_output_ns = 0
+        self.reported_input = False
+        self.last_empty_warning_ns = 0
         self.collision_pub = self.create_publisher(PointCloud2, '/hc10/collision_cloud', 1)
         self.camera_pub = self.create_publisher(PointCloud2, '/hc10/right_camera_cloud', 1)
         self.subscription = self.create_subscription(
@@ -34,6 +36,10 @@ class Perception(Node):
         cloud = point_cloud2.read_points_numpy(msg, field_names=['x', 'y', 'z'])[::4]
         xyz = cloud[:, :3].astype(np.float32)
         xyz = xyz[np.isfinite(xyz).all(axis=1)]
+        if not self.reported_input:
+            self.get_logger().info(
+                f'Nuage caméra reçu: {len(xyz)} points valides, frame={msg.header.frame_id}')
+            self.reported_input = True
         points = xyz @ ROTATION.T + ORIGIN
         keep = (
             (points[:, 0] > -4.0) & (points[:, 0] < 4.0)
@@ -43,7 +49,13 @@ class Perception(Node):
             & (points[:, 2] > -0.08) & (points[:, 2] < 2.8)
         )
         points = points[keep]
-        if now - self.last_output_ns < OUTPUT_PERIOD_NS or not len(points):
+        if not len(points):
+            if now - self.last_empty_warning_ns >= OUTPUT_PERIOD_NS:
+                self.get_logger().warning(
+                    f'Nuage reçu mais aucun des {len(xyz)} points ne passe le filtre spatial')
+                self.last_empty_warning_ns = now
+            return
+        if now - self.last_output_ns < OUTPUT_PERIOD_NS:
             return
         self.last_output_ns = now
         header = msg.header
@@ -51,6 +63,7 @@ class Perception(Node):
         output = point_cloud2.create_cloud_xyz32(header, xyz[keep].tolist())
         self.collision_pub.publish(output)
         self.camera_pub.publish(output)
+        self.get_logger().info(f'Nuage de collision publié: {len(points)} points')
 
 
 def main():
