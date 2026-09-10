@@ -30,9 +30,10 @@ HOME = [0.0] * 6
 CONVEYOR = (-0.86, -0.212, 0.35)
 # Centre de la plateforme, dans le repère base_link du HC10.
 # Son plateau est à z≈0.06; le TCP reste volontairement bien au-dessus.
-PICK_POSITION = (0.0, -1.05, 0.30)
+PICK_POSITION = (0.0, -1.05, 0.27)
 MIN_TCP_HEIGHT = 0.18
-CLEARANCE = 0.25
+PICK_CLEARANCE = 0.28
+CONVEYOR_CLEARANCE = 0.25
 
 
 class Demo(Node):
@@ -325,8 +326,8 @@ print('Démo HC10 version 2026-09-10-IK2 (IK verticale + OctoMap OMPL)', flush=T
 demo = Demo()
 demo.ready()
 demo.require_octomap()
-point_a = (PICK_POSITION[0], PICK_POSITION[1], PICK_POSITION[2] + CLEARANCE)
-point_b = (CONVEYOR[0], CONVEYOR[1], CONVEYOR[2] + CLEARANCE)
+point_a = (PICK_POSITION[0], PICK_POSITION[1], PICK_POSITION[2] + PICK_CLEARANCE)
+point_b = (CONVEYOR[0], CONVEYOR[1], CONVEYOR[2] + CONVEYOR_CLEARANCE)
 print(f'Point A au-dessus du centre de la plateforme: {point_a}')
 print(f'Point B au-dessus du convoyeur: {point_b}')
 
