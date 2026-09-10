@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <model name="trajectory_test_obstacle">
+    <static>true</static>
+    <link name="wall">
+      <collision name="collision">
+        <pose>0 0 0.35 0 0 0</pose>
+        <geometry>
+          <box><size>0.18 0.18 0.70</size></box>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <pose>0 0 0.35 0 0 0</pose>
+        <geometry>
+          <box><size>0.18 0.18 0.70</size></box>
+        </geometry>
+        <material>
+          <ambient>0.80 0.16 0.02 1</ambient>
+          <diffuse>1.00 0.25 0.03 1</diffuse>
+          <specular>0.15 0.15 0.15 1</specular>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

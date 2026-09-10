@@ -38,4 +38,12 @@ sleep 3
 gz service -s /world/room_315_only/remove --reqtype gz.msgs.Entity --reptype gz.msgs.Boolean --timeout 5000 --req 'name: "yaskawa_hc10_1", type: 2' >/dev/null || true
 gz service -s /world/room_315_only/create --reqtype gz.msgs.EntityFactory --reptype gz.msgs.Boolean --timeout 10000 --req 'sdf_filename: "'"$share"'/models/yaskawa_hc10.sdf", name: "yaskawa_hc10_1", pose: {position: {x: -15.1622, y: -3.0, z: 0.62}, orientation: {z: 0.70710678, w: 0.70710678}}'
 gz service -s /world/room_315_only/create --reqtype gz.msgs.EntityFactory --reptype gz.msgs.Boolean --timeout 10000 --req 'sdf_filename: "'"$share"'/models/mobile_pick_station.sdf", name: "mobile_pick_station", pose: {position: {x: -14.1122, y: -3.0}, orientation: {z: 0.70710678, w: 0.70710678}}'
+if [[ "${HC10_TEST_OBSTACLE:-1}" == "1" ]]; then
+  # Milieu du segment A -> B, posé sur la table. Ce mur n'est déclaré qu'à
+  # Gazebo : MoveIt doit le découvrir par la caméra RGB-D et l'OctoMap.
+  gz service -s /world/room_315_only/create \
+    --reqtype gz.msgs.EntityFactory --reptype gz.msgs.Boolean --timeout 10000 \
+    --req 'sdf_filename: "'"$share"'/models/trajectory_test_obstacle.sdf", name: "trajectory_test_obstacle", pose: {position: {x: -14.6569, y: -3.5590, z: 0.62}}'
+  echo "Obstacle de test A-B activé (HC10_TEST_OBSTACLE=0 pour le retirer)."
+fi
 wait "$sim_pid"

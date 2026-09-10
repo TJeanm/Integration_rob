@@ -176,6 +176,23 @@ Le cycle est terminé lorsque le terminal affiche :
 CYCLE DE PINCE SIMULÉ ET TRAJECTOIRE ANTI-COLLISION TERMINÉS
 ```
 
+## Test de contournement d'un obstacle
+
+Par défaut, `gazebo.sh` ajoute un mur orange sur la table, entre A et B. Cet
+obstacle existe uniquement dans Gazebo : il est observé par la caméra RGB-D,
+ajouté à l'OctoMap, puis pris en compte par OMPL. Il permet de vérifier dans
+Gazebo et RViz que la trajectoire contourne un obstacle qui n'a pas été ajouté
+manuellement à la PlanningScene.
+
+Pour comparer avec la scène sans cet obstacle, lancer le terminal 1 ainsi :
+
+```bash
+HC10_TEST_OBSTACLE=0 ./gazebo.sh
+```
+
+Après chaque changement, relancer également `perception.sh` et
+`moveit_rviz.sh` afin de reconstruire une OctoMap correspondant à la scène.
+
 ## Validation sans mouvement
 
 Pour calculer et vérifier le cycle sans envoyer les trajectoires au robot :
