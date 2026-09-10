@@ -1,0 +1,346 @@
+#!/usr/bin/env python3
+"""Collision-aware HC10 motion with a simulated gripper cycle."""
+
+import os
+import time
+
+import rclpy
+from geometry_msgs.msg import Pose
+from moveit_msgs.msg import (
+    BoundingVolume,
+    Constraints,
+    DisplayTrajectory,
+    JointConstraint,
+    PositionConstraint,
+    RobotTrajectory,
+)
+from moveit_msgs.srv import GetCartesianPath, GetMotionPlan, GetPositionFK, GetPositionIK
+from rclpy.node import Node
+from rclpy.action import ActionClient
+from moveit_msgs.action import ExecuteTrajectory
+from moveit_msgs.srv import GetPlanningScene
+from moveit_msgs.msg import PlanningSceneComponents
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Float64
+from trajectory_msgs.msg import JointTrajectory
+from shape_msgs.msg import SolidPrimitive
+
+JOINTS = ['joint_1_s', 'joint_2_l', 'joint_3_u', 'joint_4_r', 'joint_5_b', 'joint_6_t']
+HOME = [0.0] * 6
+CONVEYOR = (-0.86, -0.212, 0.35)
+# Centre de la plateforme, dans le repère base_link du HC10.
+# Son plateau est à z≈0.06; le TCP reste volontairement bien au-dessus.
+PICK_POSITION = (0.0, -1.05, 0.30)
+MIN_TCP_HEIGHT = 0.18
+CLEARANCE = 0.25
+
+
+class Demo(Node):
+    def __init__(self):
+        super().__init__('hc10_collision_aware_pick_place')
+        self.states = []
+        self.dry_run = os.environ.get('HC10_DRY_RUN') == '1'
+        self.planning_positions = None
+        self.last_tcp_xyz = None
+        self.execution = ActionClient(self, ExecuteTrajectory, '/execute_trajectory')
+        self.scene = self.create_client(GetPlanningScene, '/get_planning_scene')
+        self.arm = self.create_publisher(
+            JointTrajectory, '/yaskawa_hc10_1/joint_trajectory', 1
+        )
+        self.grip = self.create_publisher(
+            Float64, '/yaskawa_hc10_1/gripper/position_command', 1
+        )
+        self.display = self.create_publisher(DisplayTrajectory, '/display_planned_path', 1)
+        self.joint_subscription = self.create_subscription(
+            JointState, '/yaskawa_hc10_1/joint_states', self.states.append, 1
+        )
+        self.ik_client = self.create_client(GetPositionIK, '/compute_ik')
+        self.fk_client = self.create_client(GetPositionFK, '/compute_fk')
+        self.plan_client = self.create_client(GetMotionPlan, '/plan_kinematic_path')
+        self.cartesian_client = self.create_client(GetCartesianPath, '/compute_cartesian_path')
+
+    def ready(self):
+        end = time.monotonic() + 30
+        while time.monotonic() < end:
+            rclpy.spin_once(self, timeout_sec=0.1)
+            status = (
+                bool(self.states),
+                self.arm.get_subscription_count() > 0,
+                self.ik_client.service_is_ready(),
+                self.fk_client.service_is_ready(),
+                self.plan_client.service_is_ready(),
+                self.cartesian_client.service_is_ready(),
+            )
+            if all(status):
+                return
+        raise RuntimeError(
+            'Dépendances indisponibles [joints, contrôleur, IK, FK, OMPL, cartésien] '
+            f'= {status}'
+        )
+
+    def start_positions(self):
+        if self.planning_positions is not None:
+            return list(self.planning_positions)
+        state = dict(zip(self.states[-1].name, self.states[-1].position))
+        return [state.get(name, 0.0) for name in JOINTS]
+
+    def start_joint_state(self):
+        state = JointState()
+        state.name = JOINTS
+        state.position = self.start_positions()
+        return state
+
+    @staticmethod
+    def height_constraint():
+        """Keep the tool above the robot support/table throughout planning."""
+        primitive = SolidPrimitive()
+        primitive.type = SolidPrimitive.BOX
+        primitive.dimensions = [8.0, 8.0, 2.82]
+        region_pose = Pose()
+        region_pose.position.z = 1.59
+        region_pose.orientation.w = 1.0
+        volume = BoundingVolume()
+        volume.primitives = [primitive]
+        volume.primitive_poses = [region_pose]
+        constraint = PositionConstraint()
+        constraint.header.frame_id = 'base_link'
+        constraint.link_name = 'gripper_tcp'
+        constraint.constraint_region = volume
+        constraint.weight = 1.0
+        constraints = Constraints()
+        constraints.name = 'tcp_above_table'
+        constraints.position_constraints = [constraint]
+        return constraints
+
+    def ik(self, xyz, seed=None):
+        seeds = [seed] if seed is not None else [
+            self.start_positions(),
+            HOME,
+            [-1.57, 0.5, 1.0, 0.0, 1.0, 0.0],
+        ]
+        for attempt, candidate in enumerate(seeds, 1):
+            request = GetPositionIK.Request()
+            ik = request.ik_request
+            ik.group_name = 'manipulator'
+            ik.ik_link_name = 'gripper_tcp'
+            ik.pose_stamped.header.frame_id = 'base_link'
+            pose = ik.pose_stamped.pose
+            pose.position.x, pose.position.y, pose.position.z = xyz
+            pose.orientation.x = 1.0  # pince verticale, approche par le haut
+            pose.orientation.y = 0.0
+            pose.orientation.z = 0.0
+            pose.orientation.w = 0.0
+            ik.robot_state.joint_state.name = JOINTS
+            ik.robot_state.joint_state.position = candidate
+            # IK only computes a vertical tool pose. Collision checking belongs
+            # to OMPL / Cartesian planning below, both fed by MoveIt's OctoMap.
+            # Asking KDL to check the raw cloud here rejects valid goals before
+            # a collision-aware trajectory can even be planned.
+            ik.avoid_collisions = False
+            ik.timeout.sec = 3
+            print(
+                f'IK essai {attempt}: frame={ik.pose_stamped.header.frame_id} '
+                f'groupe={ik.group_name} link={ik.ik_link_name} xyz={xyz} '
+                f'quaternion=(x={pose.orientation.x}, y={pose.orientation.y}, '
+                f'z={pose.orientation.z}, w={pose.orientation.w}) seed={list(candidate)}',
+                flush=True,
+            )
+            future = self.ik_client.call_async(request)
+            rclpy.spin_until_future_complete(self, future, timeout_sec=5)
+            if not future.done():
+                print(f'IK essai {attempt}: TIMEOUT client après 5 s', flush=True)
+                continue
+            response = future.result()
+            if response is None:
+                print(f'IK essai {attempt}: réponse absente', flush=True)
+                continue
+            print(f'IK essai {attempt}: code MoveIt={response.error_code.val}', flush=True)
+            if response is not None and response.error_code.val == 1:
+                solution = dict(zip(
+                    response.solution.joint_state.name,
+                    response.solution.joint_state.position,
+                ))
+                result = [solution[name] for name in JOINTS]
+                self.verify_fk(result, xyz)
+                return result
+        raise RuntimeError(f'IK impossible pour {xyz}')
+
+    def verify_fk(self, joints, expected_xyz):
+        request = GetPositionFK.Request()
+        request.header.frame_id = 'base_link'
+        request.fk_link_names = ['gripper_tcp']
+        request.robot_state.joint_state.name = JOINTS
+        request.robot_state.joint_state.position = joints
+        future = self.fk_client.call_async(request)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=5)
+        if not future.done() or future.result() is None or future.result().error_code.val != 1:
+            raise RuntimeError('FK impossible pour vérifier la pose verticale')
+        pose = future.result().pose_stamped[0].pose
+        q = pose.orientation
+        tool_z = 1.0 - 2.0 * (q.x * q.x + q.y * q.y)
+        print(
+            f'FK gripper_tcp: xyz=({pose.position.x:.4f}, {pose.position.y:.4f}, '
+            f'{pose.position.z:.4f}) quaternion=({q.x:.4f}, {q.y:.4f}, '
+            f'{q.z:.4f}, {q.w:.4f}) axe_Z_en_base.z={tool_z:.4f}',
+            flush=True,
+        )
+        if tool_z > -0.98:
+            raise RuntimeError('La pince calculée ne pointe pas verticalement vers le bas')
+        error = ((pose.position.x - expected_xyz[0]) ** 2
+                 + (pose.position.y - expected_xyz[1]) ** 2
+                 + (pose.position.z - expected_xyz[2]) ** 2) ** 0.5
+        if error > 0.002:
+            raise RuntimeError(f'Erreur FK de {error:.4f} m par rapport à la cible')
+        self.last_tcp_xyz = expected_xyz
+
+    def show_and_execute(self, trajectory):
+        shown = DisplayTrajectory()
+        shown.model_id = 'yaskawa_hc10'
+        shown.trajectory_start.joint_state = self.states[-1]
+        shown.trajectory = [RobotTrajectory(joint_trajectory=trajectory)]
+        self.display.publish(shown)
+        end = time.monotonic() + 0.4
+        while time.monotonic() < end:
+            rclpy.spin_once(self, timeout_sec=0.05)
+        if trajectory.points:
+            final = dict(zip(trajectory.joint_names, trajectory.points[-1].positions))
+            self.planning_positions = [final[name] for name in JOINTS]
+        if self.dry_run:
+            print('DRY-RUN: trajectoire planifiée, exécution contrôleur ignorée', flush=True)
+            return
+        if not self.execution.wait_for_server(timeout_sec=5):
+            raise RuntimeError("Action MoveIt execute_trajectory absente")
+        goal = ExecuteTrajectory.Goal()
+        goal.trajectory = RobotTrajectory(joint_trajectory=trajectory)
+        future = self.execution.send_goal_async(goal)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=5)
+        handle = future.result()
+        if handle is None or not handle.accepted:
+            raise RuntimeError("Exécution refusée par MoveIt")
+        result = handle.get_result_async()
+        rclpy.spin_until_future_complete(self, result)
+        if result.result().result.error_code.val != 1:
+            raise RuntimeError("MoveIt n'a pas terminé le mouvement; descente annulée")
+
+    def require_octomap(self):
+        if not self.scene.wait_for_service(timeout_sec=5):
+            raise RuntimeError("Scène MoveIt indisponible")
+        request = GetPlanningScene.Request()
+        request.components.components = PlanningSceneComponents.OCTOMAP
+        future = self.scene.call_async(request)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=5)
+        response = future.result()
+        if response is None or not response.scene.world.octomap.octomap.data:
+            raise RuntimeError("OctoMap vide : lancer perception puis attendre sa reconstruction dans RViz")
+        print(
+            f"OctoMap présente dans la scène MoveIt: "
+            f"{len(response.scene.world.octomap.octomap.data)} octets",
+            flush=True,
+        )
+
+    def plan_to(self, target, label):
+        self.require_octomap()
+        request = GetMotionPlan.Request()
+        motion = request.motion_plan_request
+        motion.group_name = 'manipulator'
+        motion.pipeline_id = 'ompl'
+        motion.planner_id = 'RRTConnectkConfigDefault'
+        motion.allowed_planning_time = 10.0
+        motion.num_planning_attempts = 5
+        motion.max_velocity_scaling_factor = 0.12
+        motion.max_acceleration_scaling_factor = 0.12
+        motion.start_state.joint_state = self.start_joint_state()
+        motion.path_constraints = self.height_constraint()
+        goal = Constraints()
+        for name, position in zip(JOINTS, target):
+            goal.joint_constraints.append(JointConstraint(
+                joint_name=name,
+                position=position,
+                tolerance_above=0.003,
+                tolerance_below=0.003,
+                weight=1.0,
+            ))
+        motion.goal_constraints = [goal]
+        future = self.plan_client.call_async(request)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=20)
+        response = future.result().motion_plan_response
+        if response.error_code.val != 1:
+            raise RuntimeError(f'OMPL refuse le trajet vers {label}: {response.error_code.val}')
+        print(f'Trajet vers {label} validé avec l’OctoMap')
+        self.show_and_execute(response.trajectory.joint_trajectory)
+
+    def vertical(self, xyzs, label):
+        self.require_octomap()
+        if self.last_tcp_xyz is None:
+            raise RuntimeError(f'Pose TCP de départ inconnue pour {label}')
+        for xyz in xyzs:
+            if (abs(xyz[0] - self.last_tcp_xyz[0]) > 1e-6
+                    or abs(xyz[1] - self.last_tcp_xyz[1]) > 1e-6):
+                raise RuntimeError(
+                    f'{label} ne conserve pas X/Y: {self.last_tcp_xyz} -> {xyz}'
+                )
+        request = GetCartesianPath.Request()
+        request.header.frame_id = 'base_link'
+        request.start_state.joint_state = self.start_joint_state()
+        request.group_name = 'manipulator'
+        request.link_name = 'gripper_tcp'
+        request.max_step = 0.005
+        request.jump_threshold = 0.0
+        request.avoid_collisions = True
+        request.path_constraints = self.height_constraint()
+        request.max_velocity_scaling_factor = 0.06
+        request.max_acceleration_scaling_factor = 0.06
+        for xyz in xyzs:
+            pose = Pose()
+            pose.position.x, pose.position.y, pose.position.z = xyz
+            pose.orientation.w = 0.0
+            pose.orientation.x = 1.0
+            request.waypoints.append(pose)
+        future = self.cartesian_client.call_async(request)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=20)
+        response = future.result()
+        if response is None or response.fraction < 0.999:
+            fraction = 0.0 if response is None else response.fraction
+            raise RuntimeError(f'{label} bloquée par une collision: {fraction:.0%} réalisable')
+        final = dict(zip(
+            response.solution.joint_trajectory.joint_names,
+            response.solution.joint_trajectory.points[-1].positions,
+        ))
+        self.verify_fk([final[name] for name in JOINTS], xyzs[-1])
+        print(f'{label}: X/Y constants, pose finale vérifiée par FK', flush=True)
+        self.show_and_execute(response.solution.joint_trajectory)
+
+    def gripper(self, opening):
+        if self.dry_run:
+            print(f'DRY-RUN: commande pince {opening:.3f} m ignorée', flush=True)
+            return
+        self.grip.publish(Float64(data=opening))
+        end = time.monotonic() + 2.0
+        while time.monotonic() < end:
+            rclpy.spin_once(self, timeout_sec=0.05)
+
+
+rclpy.init()
+print('Démo HC10 version 2026-09-10-IK2 (IK verticale + OctoMap OMPL)', flush=True)
+demo = Demo()
+demo.ready()
+demo.require_octomap()
+point_a = (PICK_POSITION[0], PICK_POSITION[1], PICK_POSITION[2] + CLEARANCE)
+point_b = (CONVEYOR[0], CONVEYOR[1], CONVEYOR[2] + CLEARANCE)
+print(f'Point A au-dessus du centre de la plateforme: {point_a}')
+print(f'Point B au-dessus du convoyeur: {point_b}')
+
+demo.gripper(0.035)
+demo.plan_to(demo.ik(point_a), 'A')
+demo.vertical([PICK_POSITION], 'descente au-dessus de la plateforme')
+demo.gripper(0.0)
+demo.vertical([point_a], 'remontée vers A')
+demo.plan_to(demo.ik(point_b), 'B')
+demo.vertical([(CONVEYOR[0], CONVEYOR[1], max(CONVEYOR[2], MIN_TCP_HEIGHT))], 'descente sur le convoyeur')
+demo.gripper(0.035)
+demo.vertical([point_b], 'remontée depuis B')
+demo.plan_to(HOME, 'la position initiale')
+
+print('CYCLE DE PINCE SIMULÉ ET TRAJECTOIRE ANTI-COLLISION TERMINÉS')
+demo.destroy_node()
+rclpy.shutdown()

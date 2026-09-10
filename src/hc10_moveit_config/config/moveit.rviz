@@ -1,23 +1,108 @@
 Panels:
   - Class: rviz_common/Displays
     Name: Displays
-
 Visualization Manager:
   Class: ""
+  Global Options:
+    Background Color: 35; 35; 35
+    Fixed Frame: base_link
+    Frame Rate: 20
   Displays:
     - Class: rviz_default_plugins/Grid
       Name: Grid
-      Value: true
-
+      Enabled: true
+      Plane: XY
+      Cell Size: 0.5
+    - Class: rviz_default_plugins/RobotModel
+      Name: HC10 reel
+      Enabled: true
+      Description Source: Topic
+      Description Topic:
+        Value: /robot_description
+        Reliability Policy: Reliable
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Depth: 1
+      Visual Enabled: true
+      Collision Enabled: false
+      Update Interval: 0
+    - Class: moveit_rviz_plugin/PlanningScene
+      Name: Scene MoveIt et OctoMap
+      Enabled: true
+      Planning Scene Topic: /monitored_planning_scene
+      Robot Description: robot_description
+      Scene Geometry:
+        Scene Alpha: 0.65
+        Show Scene Geometry: true
+        Show Octomap: true
+        Octomap Rendering: Occupied Voxels
+        Octomap Color Mode: Z-Axis
+      Robot State:
+        Robot Alpha: 0.55
+        Show Robot Visual: true
+        Show Robot Collision: false
     - Class: moveit_rviz_plugin/MotionPlanning
-      Name: MotionPlanning
+      Name: Commandes MoveIt2
+      Enabled: true
+      Move Group Namespace: ""
+      Planning Scene Topic: /monitored_planning_scene
+      Robot Description: robot_description
+      Planning Request:
+        Planning Group: manipulator
+        Interactive Marker Size: 0.15
       Planned Path:
         Loop Animation: false
         State Display Time: 0.05 s
         Trajectory Topic: /display_planned_path
-      Planning Scene Topic: /monitored_planning_scene
-      Robot Description: robot_description
-      Value: true
-
-  Global Options:
-    Background Color: 48; 48; 48
+      Scene Geometry:
+        Scene Alpha: 0.35
+      Scene Robot:
+        Robot Alpha: 0.5
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Obstacles filtres autour du HC10
+      Enabled: true
+      Topic:
+        Value: /hc10/collision_cloud
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Depth: 1
+      Style: Points
+      Size (Pixels): 2
+      Color Transformer: FlatColor
+      Color: 0; 220; 255
+      Axis: Z
+      Use Fixed Frame: false
+      Autocompute Intensity Bounds: true
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Camera droite (bleu)
+      Enabled: false
+      Topic:
+        Value: /hc10/right_camera_cloud
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Depth: 1
+      Style: Points
+      Size (Pixels): 2
+      Color Transformer: FlatColor
+      Color: 30; 120; 255
+      Use Fixed Frame: false
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 2.7
+      Pitch: 0.45
+      Yaw: 1.75
+      Focal Point:
+        X: 0.0
+        Y: -0.65
+        Z: 0.75
+Window Geometry:
+  Width: 1000
+  Height: 760
+  X: 40
+  Y: 40

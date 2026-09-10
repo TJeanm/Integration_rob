@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""Publish the Room 315 RGB-D cloud used by the HC10 collision OctoMap."""
+
+import numpy as np
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import PointCloud2
+from sensor_msgs_py import point_cloud2
+
+ROTATION = np.array([[0, 1, 0], [0, 0, -1], [-1, 0, 0]], dtype=np.float32)
+ORIGIN = np.array([-1.7000, -0.2622, 3.3300], dtype=np.float32)
+INPUT_PERIOD_NS = 200_000_000
+OUTPUT_PERIOD_NS = 1_000_000_000
+
+
+class Perception(Node):
+    def __init__(self):
+        super().__init__('hc10_room315_perception')
+        self.last_input_ns = 0
+        self.last_output_ns = 0
+        self.collision_pub = self.create_publisher(PointCloud2, '/hc10/collision_cloud', 1)
+        self.camera_pub = self.create_publisher(PointCloud2, '/hc10/right_camera_cloud', 1)
+        self.subscription = self.create_subscription(
+            PointCloud2, '/room_315/perception/right_rail_rgbd/points', self.cloud, 1
+        )
+
+    def cloud(self, msg):
+        now = self.get_clock().now().nanoseconds
+        if now - self.last_input_ns < INPUT_PERIOD_NS:
+            return
+        self.last_input_ns = now
+        cloud = point_cloud2.read_points_numpy(msg, field_names=['x', 'y', 'z'])[::4]
+        xyz = cloud[:, :3].astype(np.float32)
+        xyz = xyz[np.isfinite(xyz).all(axis=1)]
+        points = xyz @ ROTATION.T + ORIGIN
+        keep = (
+            (points[:, 0] > -4.0) & (points[:, 0] < 4.0)
+            & (points[:, 1] > -6.5) & (points[:, 1] < 3.0)
+            # The HC10 support tabletop is around z=0 in base_link. Keep a
+            # small band below it so the OctoMap protects the robot table.
+            & (points[:, 2] > -0.08) & (points[:, 2] < 2.8)
+        )
+        points = points[keep]
+        if now - self.last_output_ns < OUTPUT_PERIOD_NS or not len(points):
+            return
+        self.last_output_ns = now
+        header = msg.header
+        header.frame_id = 'room315_right_rail_rgbd_optical_frame'
+        output = point_cloud2.create_cloud_xyz32(header, xyz[keep].tolist())
+        self.collision_pub.publish(output)
+        self.camera_pub.publish(output)
+
+
+def main():
+    rclpy.init()
+    node = Perception()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()

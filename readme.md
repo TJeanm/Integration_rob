@@ -138,6 +138,74 @@ In the tested VMware / Gazebo Harmonic environment, the Gazebo GUI must be start
 colcon build --symlink-install
 source install/setup.bash
 
+## Lancement de l'intégration Room 315
+
+The repository also contains the project integration developed on top of the
+original MoveIt configuration: the Room 315 RGB-D camera, filtered collision
+cloud, OctoMap, mobile platform, animated gripper and the collision-aware A/B
+demonstration. No object is spawned: the gripper closes above the platform as
+if it were grasping one, then opens above the conveyor.
+
+Le lancement utilise quatre terminaux ouverts dans le dossier du dépôt. Les
+scripts arrêtent automatiquement leurs anciennes instances afin d'éviter les
+serveurs Gazebo, MoveIt ou nœuds de perception en double.
+
+Préparer le workspace une fois :
+
+```bash
+colcon build --symlink-install
+source install/setup.bash
+```
+
+Ouvrir ensuite quatre terminaux dans `~/Desktop/Integration_rob` et exécuter
+les commandes suivantes dans cet ordre :
+
+Terminal 1 — simulation Gazebo :
+
+```bash
+./gazebo.sh
+```
+
+Terminal 2 — perception Astra et nuage de collision :
+
+```bash
+./perception.sh
+```
+
+Terminal 3 — adaptateur contrôleur, MoveIt 2 et RViz :
+
+```bash
+./moveit_rviz.sh
+```
+
+Attendre que RViz affiche le robot et que le nuage soit visible, puis terminal
+4 — démonstration :
+
+```bash
+./demo.sh
+```
+
+`demo.sh` vérifie que l'OctoMap est présente dans la PlanningScene MoveIt,
+calcule A au-dessus du centre de la plateforme, descend verticalement,
+remonte, rejoint B au-dessus du convoyeur, descend verticalement et revient à
+la position initiale. La pince s'ouvre et se ferme en simulation, sans cube
+ni attachement artificiel.
+
+Pour valider toute la planification sans faire bouger le robot, utiliser le
+terminal 4 avec :
+
+```bash
+./validate_demo.sh
+```
+
+Cette validation journalise les requêtes IK, le quaternion, le repère, le
+code d'erreur MoveIt, la FK de `gripper_tcp`, l'orientation verticale, la
+constance de X/Y pendant les descentes et la planification OMPL avec
+l'OctoMap. Elle doit afficher `CYCLE DE PINCE SIMULÉ ET TRAJECTOIRE
+ANTI-COLLISION TERMINÉS`.
+
+Pour arrêter proprement, faire `Ctrl+C` dans les terminaux 4, 3, 2 puis 1.
+
 
 ## Clean rebuild
 
@@ -151,4 +219,3 @@ source /opt/ros/jazzy/setup.bash
 colcon build --symlink-install
 
 source install/setup.bash
-
