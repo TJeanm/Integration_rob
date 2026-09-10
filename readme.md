@@ -1,41 +1,93 @@
-# Integration Robotique — ROS 2 / Yaskawa HC10 / Room 315
+# Intégration robotique — Yaskawa HC10, ROS 2 et Room 315
 
-Projet d'intégration robotique sous ROS 2 autour du robot industriel Yaskawa HC10, avec simulation Gazebo, MoveIt 2 et environnement Room 315.
+Ce dépôt présente une étude de faisabilité pour la génération de trajectoires
+sans collision d'un bras industriel Yaskawa HC10. La cellule est simulée dans
+Gazebo, la perception repose sur la caméra RGB-D de la Room 315 et MoveIt 2
+calcule les trajectoires à partir de l'OctoMap affichée dans RViz.
 
-## Environment
+La démonstration réalise le cycle suivant :
 
-Tested with:
+1. rejoindre un point A au-dessus du centre de la plateforme mobile ;
+2. descendre verticalement et fermer la pince comme si un objet était saisi ;
+3. remonter verticalement ;
+4. rejoindre un point B au-dessus du convoyeur ;
+5. descendre verticalement et ouvrir la pince ;
+6. remonter puis revenir à la position initiale.
 
-- Ubuntu 24.04
-- ROS 2 Jazzy
-- Gazebo Harmonic
-- MoveIt 2
-- RViz2
-- Python 3.12
+Aucun cube n'est attaché artificiellement à la pince. L'ouverture et la
+fermeture sont simulées sans objet.
 
-## Repository structure
+## Environnement validé
 
-The ROS 2 packages are located in: src/
+- Ubuntu 24.04 ;
+- ROS 2 Jazzy ;
+- Gazebo Harmonic ;
+- MoveIt 2 ;
+- RViz 2 ;
+- Python 3.12.
 
+## Architecture
 
-The following directories are generated locally and are not versioned:
+```text
+Caméra RGB-D Room 315
+        │
+        ▼
+Nuage PointCloud2 filtré ──────► affichage RViz
+        │
+        ▼
+OctoMap de la PlanningScene MoveIt
+        │
+        ▼
+IK verticale + planification OMPL + trajets cartésiens
+        │
+        ▼
+Adaptateur FollowJointTrajectory ──────► robot HC10 dans Gazebo
+```
 
+Les paquets ROS 2 du dépôt sont :
 
-build/
-install/
-log/
+- `hc10_mfja_control_adapter` : adaptation des commandes MoveIt vers Gazebo ;
+- `hc10_moveit_config` : URDF, SRDF, cinématique, OMPL, RViz et OctoMap ;
+- `hc10_pick_place_demo` : perception, plateforme et cycle de démonstration.
 
+## Dépendance Room 315
 
-## Requirements
+Le dépôt s'appuie sur les paquets du projet externe
+[`mfja_3rd_floor_gz`](https://github.com/aip-primeca-occitanie/mfja_3rd_floor_gz/tree/INTERNSHIP-ALI-2026),
+notamment `mfja_3rd_floor_bringup`, `mfja_robot_control_config` et
+`mfja_3rd_floor_description`.
 
-ROS 2 Jazzy must already be installed.
+Ils doivent être compilés dans un workspace ROS 2 avant ce projet. Le dossier
+`install` de ce workspace sera appelé **underlay MFJA** dans la suite.
 
-Install the main dependencies:
+Les scripts le détectent automatiquement s'il se trouve à côté de ce dépôt
+sous l'un de ces chemins :
 
+```text
+../hc10_ros2_ws/install
+../mfja_3rd_floor_gz/install
+```
 
+Dans tous les autres cas, indiquer son chemin :
+
+```bash
+export MFJA_UNDERLAY=/chemin/vers/le/workspace_mfja/install
+```
+
+Pour conserver ce réglage dans les nouveaux terminaux :
+
+```bash
+echo 'export MFJA_UNDERLAY=/chemin/vers/le/workspace_mfja/install' >> ~/.bashrc
+source ~/.bashrc
+```
+
+## Installation
+
+Installer les dépendances principales :
+
+```bash
 sudo apt update
-
-sudo apt install \
+sudo apt install -y \
   ros-jazzy-moveit \
   ros-jazzy-ros-gz \
   ros-jazzy-ros-gz-sim \
@@ -45,192 +97,171 @@ sudo apt install \
   ros-jazzy-joint-state-publisher \
   ros-jazzy-rviz2 \
   python3-rosdep
+```
 
+Initialiser `rosdep` une seule fois sur la machine si nécessaire :
 
-Initialize `rosdep` if needed:
-
-
+```bash
 sudo rosdep init
 rosdep update
+```
 
+Cloner la branche de travail :
 
-## Clone
-
-
-git clone https://github.com/TJeanm/Integration_rob.git
+```bash
+git clone --branch integration-avancement \
+  https://github.com/TJeanm/Integration_rob.git
 cd Integration_rob
+```
 
-
-## Install package dependencies
-
-
-source /opt/ros/jazzy/setup.bash
-
-rosdep install \
-  --from-paths src \
-  --ignore-src \
-  -r \
-  -y
-
-
-## Build
-
-
-source /opt/ros/jazzy/setup.bash
-
-colcon build --symlink-install
-
-source install/setup.bash
-
-
-## Launch Room 315 with the Yaskawa HC10
-
-
-ros2 launch mfja_3rd_floor_bringup room_315_only.launch.py \
-  robots:=hc10 \
-  gui:=true \
-  start_paused:=false
-
-
-## Launch the isolated HC10 simulation
-
-
-ros2 launch mfja_robot_control_config \
-  isolated_industrial_robot.launch.py \
-  robot:=hc10 \
-  gui:=true \
-  start_paused:=false
-
-
-## MoveIt 2
-
-The repository contains a MoveIt 2 configuration for the HC10.
-
-After building and sourcing the workspace:
-
-
-ros2 launch hc10_moveit_config moveit.launch.py
-
-
-The MoveIt setup uses the Yaskawa HC10 joint model together with the MFJA simulation interfaces.
-
-## Gazebo rendering note
-
-On some VMware virtual machines, the Ogre2 rendering engine may produce severe flickering.
-
-The simulation is therefore configured to use Ogre1:
-
-
---render-engine ogre
-
-
-If Gazebo flickers heavily, verify that Ogre2 has not been enabled.
-
-## Room 315 GUI note
-
-The HC10 is spawned dynamically in Room 315.
-
-In the tested VMware / Gazebo Harmonic environment, the Gazebo GUI must be started after the HC10 has been spawned so that the robot is correctly displayed with Ogre1.
-
-## Rebuilding after changes
-
-
-colcon build --symlink-install
-source install/setup.bash
-
-## Lancement de l'intégration Room 315
-
-The repository also contains the project integration developed on top of the
-original MoveIt configuration: the Room 315 RGB-D camera, filtered collision
-cloud, OctoMap, mobile platform, animated gripper and the collision-aware A/B
-demonstration. No object is spawned: the gripper closes above the platform as
-if it were grasping one, then opens above the conveyor.
-
-Le lancement utilise quatre terminaux ouverts dans le dossier du dépôt. Les
-scripts arrêtent automatiquement leurs anciennes instances afin d'éviter les
-serveurs Gazebo, MoveIt ou nœuds de perception en double.
-
-Préparer le workspace une fois, quel que soit le dossier dans lequel le dépôt
-a été cloné :
+Installer les dépendances ROS du dépôt et compiler :
 
 ```bash
 source /opt/ros/jazzy/setup.bash
+if [ -n "${MFJA_UNDERLAY:-}" ]; then source "$MFJA_UNDERLAY/setup.bash"; fi
+rosdep install --from-paths src --ignore-src -r -y
 colcon build --symlink-install
-source install/setup.bash
 ```
 
-Les paquets de la Room 315 viennent du workspace externe
-`mfja_3rd_floor_gz`. Si son dossier `install` n'est pas situé à côté de ce
-dépôt sous le nom `hc10_ros2_ws/install` ou `mfja_3rd_floor_gz/install`,
-indiquer son emplacement avant les lancements :
+Les scripts déterminent eux-mêmes le chemin du dépôt. Le projet peut être
+cloné ailleurs que dans `~/Desktop` et utilisé par n'importe quel utilisateur.
 
-```bash
-export MFJA_UNDERLAY=/chemin/vers/le/workspace_mfja/install
-```
+## Lancement — quatre terminaux
 
-Cette variable peut être ajoutée au `~/.bashrc`. Aucun script ne dépend d'un
-nom d'utilisateur ni du dossier `Desktop`.
+Ouvrir quatre terminaux dans le dossier `Integration_rob`. Si
+`MFJA_UNDERLAY` n'est pas enregistré dans `~/.bashrc`, l'exporter dans chaque
+terminal avant la commande.
 
-Ouvrir ensuite quatre terminaux dans le dossier cloné et exécuter les
-commandes suivantes dans cet ordre. Répéter l'export `MFJA_UNDERLAY` dans
-chaque terminal s'il n'est pas défini dans le `~/.bashrc` :
-
-Terminal 1 — simulation Gazebo :
+### Terminal 1 — Gazebo
 
 ```bash
 ./gazebo.sh
 ```
 
-Terminal 2 — perception Astra et nuage de collision :
+Attendre l'affichage de la Room 315, du HC10, du convoyeur et de la plateforme
+mobile.
+
+### Terminal 2 — perception RGB-D
 
 ```bash
 ./perception.sh
 ```
 
-Terminal 3 — adaptateur contrôleur, MoveIt 2 et RViz :
+Ce nœud filtre le nuage de la caméra Room 315 et publie
+`/hc10/collision_cloud` pour MoveIt.
+
+### Terminal 3 — MoveIt 2 et RViz
 
 ```bash
 ./moveit_rviz.sh
 ```
 
-Attendre que RViz affiche le robot et que le nuage soit visible, puis terminal
-4 — démonstration :
+Attendre que RViz affiche le robot et le nuage de points. MoveIt construit
+alors l'OctoMap utilisée par OMPL pour les contrôles de collision.
+
+### Terminal 4 — démonstration
 
 ```bash
 ./demo.sh
 ```
 
-`demo.sh` vérifie que l'OctoMap est présente dans la PlanningScene MoveIt,
-calcule A au-dessus du centre de la plateforme, descend verticalement,
-remonte, rejoint B au-dessus du convoyeur, descend verticalement et revient à
-la position initiale. La pince s'ouvre et se ferme en simulation, sans cube
-ni attachement artificiel.
+Au début de chaque cycle, le script vide l'ancienne OctoMap, attend sa
+reconstruction depuis la caméra et vérifie que l'état initial du robot est
+valide. Cela permet de relancer `demo.sh` plusieurs fois sans conserver les
+voxels générés pendant le cycle précédent.
 
-Pour valider toute la planification sans faire bouger le robot, utiliser le
-terminal 4 avec :
+Le cycle est terminé lorsque le terminal affiche :
+
+```text
+CYCLE DE PINCE SIMULÉ ET TRAJECTOIRE ANTI-COLLISION TERMINÉS
+```
+
+## Validation sans mouvement
+
+Pour calculer et vérifier le cycle sans envoyer les trajectoires au robot :
 
 ```bash
 ./validate_demo.sh
 ```
 
-Cette validation journalise les requêtes IK, le quaternion, le repère, le
-code d'erreur MoveIt, la FK de `gripper_tcp`, l'orientation verticale, la
-constance de X/Y pendant les descentes et la planification OMPL avec
-l'OctoMap. Elle doit afficher `CYCLE DE PINCE SIMULÉ ET TRAJECTOIRE
-ANTI-COLLISION TERMINÉS`.
+Cette commande contrôle notamment :
 
-Pour arrêter proprement, faire `Ctrl+C` dans les terminaux 4, 3, 2 puis 1.
+- la présence et la reconstruction de l'OctoMap ;
+- les requêtes IK et leurs codes MoveIt ;
+- la pose du TCP par cinématique directe ;
+- l'orientation verticale de la pince ;
+- la conservation de X/Y pendant les descentes ;
+- les trajectoires OMPL vers A, B et la position initiale.
 
+## Arrêt
 
-## Clean rebuild
+Utiliser `Ctrl+C` dans l'ordre suivant : terminal 4, terminal 3, terminal 2,
+puis terminal 1.
 
-If needed:
+Chaque script ferme ses anciennes instances avant un nouveau lancement afin
+d'éviter plusieurs serveurs Gazebo, MoveIt, RViz ou perception concurrents.
 
+## Dépannage
 
-rm -rf build install log
+### `mfja_3rd_floor_bringup` introuvable
 
+Vérifier le chemin de l'underlay :
+
+```bash
+export MFJA_UNDERLAY=/chemin/vers/le/workspace_mfja/install
+test -f "$MFJA_UNDERLAY/setup.bash" && echo "Underlay trouvé"
+```
+
+### Workspace non compilé
+
+Depuis la racine du dépôt :
+
+```bash
 source /opt/ros/jazzy/setup.bash
-
+if [ -n "${MFJA_UNDERLAY:-}" ]; then source "$MFJA_UNDERLAY/setup.bash"; fi
 colcon build --symlink-install
+```
 
-source install/setup.bash
+### OctoMap vide
+
+Vérifier que `perception.sh` est encore actif et que le nuage est publié :
+
+```bash
+source setup_env.sh
+ros2 topic info /hc10/collision_cloud
+```
+
+Le nombre de publishers doit être au moins égal à 1.
+
+### Gazebo affiche une fenêtre grise
+
+Fermer le terminal Gazebo avec `Ctrl+C`, puis relancer :
+
+```bash
+./gazebo.sh
+```
+
+Le script supprime les anciennes instances qui pourraient publier le même
+monde sur la même partition.
+
+### La démonstration refuse de démarrer
+
+Lancer d'abord la validation :
+
+```bash
+./validate_demo.sh
+```
+
+Le journal indique si l'échec vient d'une dépendance absente, de l'IK, d'une
+collision avec l'OctoMap ou d'un trajet cartésien incomplet.
+
+## Reconstruction après modification
+
+```bash
+source /opt/ros/jazzy/setup.bash
+if [ -n "${MFJA_UNDERLAY:-}" ]; then source "$MFJA_UNDERLAY/setup.bash"; fi
+colcon build --symlink-install
+```
+
+Les dossiers `build/`, `install/` et `log/` sont générés localement et ne sont
+pas versionnés.
