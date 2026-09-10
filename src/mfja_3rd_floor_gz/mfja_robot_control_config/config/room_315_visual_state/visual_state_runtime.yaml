@@ -1,0 +1,16 @@
+room_315_visual_state_inference_node:
+  ros__parameters:
+    use_sim_time: true
+    runtime_generation: v4
+    runtime_mode: active
+    v4_promotion_manifest_path: "/home/tiago/room315_visual_runtime_candidate_v4_seed31520260811_epoch11_869d6404_closed_loop_runtime_attempt1/runtime_promotion_manifest.json"
+    expected_v4_promotion_manifest_sha256: "506cae0511cf1675fdd666103ce7fc0b5980eb5e68d4cbadf0af99d9ee9560da"
+    device: auto
+    presence_state_timeout_s: 1.0
+    presence_warmup_s: 0.5
+    dry_run_state_fusion: true
+    plansys2_update_enabled: false
+    raw_observation_topic: /room_315/visual_state/raw
+    raw_model_prediction_topic: /room_315/visual_state/raw_model_prediction
+    validation_topic: /room_315/visual_state/validation
+    accepted_observed_state_topic: /room_315/visual_state/observed_state

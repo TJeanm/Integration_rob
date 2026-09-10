@@ -1,0 +1,81 @@
+\begin{tikzpicture}[
+  font=\sffamily\small,
+  stage/.style={
+    draw=black!22,
+    rounded corners=2mm,
+    fill=white,
+    align=left,
+    text width=151mm,
+    minimum height=18mm,
+    inner sep=2.4mm,
+    execute at begin node={\raggedright
+      \hyphenpenalty=10000\exhyphenpenalty=10000
+      \emergencystretch=3em\relax}
+  },
+  phase/.style={
+    rounded corners=1.2mm,
+    fill=mfjablue,
+    text=white,
+    font=\sffamily\bfseries,
+    text width=151mm,
+    align=left,
+    inner xsep=2.4mm,
+    inner ysep=1.2mm
+  },
+  flow/.style={-{Latex[length=2.2mm]},line width=1.05pt,mfjablue}
+]
+  \node[phase] (p1) {Phase 1 --- initial assigned task};
+
+  \node[stage,below=3mm of p1] (s1) {%
+    {\color{mfjablue}\bfseries 1. Third-floor CAD and robots}\par\smallskip
+    {\color{mfjaorange}\bfseries Engineering need:} create the floor environment and give different robot models consistent names and communication channels.\quad
+    {\color{mfjablue}\bfseries Implementation:} design the floor geometry and room furnishings in Autodesk Inventor, export them to Gazebo, separate software responsibilities
+    and give each robot a separate set of names.\quad
+    {\color{mfjagreen}\bfseries Result:} a furnished full-floor scene that can start any supported combination of simulated robots.};
+
+  \node[stage,below=4mm of s1] (s2) {%
+    {\color{mfjablue}\bfseries 2. Shuttle motion}\par\smallskip
+    {\color{mfjaorange}\bfseries Engineering need:} repeatable motion through rail switches.\quad
+    {\color{mfjablue}\bfseries Implementation:} use smooth rail paths parameterised by travelled distance and Gazebo commands for position and orientation.\quad
+    {\color{mfjagreen}\bfseries Result:} repeatable continuous motion with an explicitly
+    defined path-following model.};
+
+  \node[stage,below=4mm of s2] (s3) {%
+    {\color{mfjablue}\bfseries 3. Rail layout and devices}\par\smallskip
+    {\color{mfjaorange}\bfseries Engineering need:} define allowed routes, stops and device
+    behaviour.\quad
+    {\color{mfjablue}\bfseries Implementation:} declare one-way rail segments, switches, slots, stoppers
+    and sensors in configuration files.\quad
+    {\color{mfjagreen}\bfseries Result:} state of both rails that the planner can read to coordinate shuttles.};
+
+  \draw[flow] (s1.south) -- (s2.north);
+  \draw[flow] (s2.south) -- (s3.north);
+
+  \node[phase,below=5mm of s3] (p2)
+    {Phase 2 --- additional research direction};
+
+  \node[stage,below=3mm of p2] (s4) {%
+    {\color{mfjablue}\bfseries 4. Camera and task interfaces}\par\smallskip
+    {\color{mfjaorange}\bfseries Engineering need:} interpret English tasks and the current camera scene.\quad
+    {\color{mfjablue}\bfseries Implementation:} pair overhead colour-camera views, keep reference labels separate from
+    model input, and convert task descriptions with predefined fields into confirmed goals.\quad
+    {\color{mfjagreen}\bfseries Result:} structured language and camera inputs for planning.};
+
+  \node[stage,below=4mm of s4] (s5) {%
+    {\color{mfjablue}\bfseries 5. Planning and software-supervised execution}\par\smallskip
+    {\color{mfjaorange}\bfseries Engineering need:} convert the current task and equipment state into checked motion.\quad
+    {\color{mfjablue}\bfseries Implementation:} rebuild the PDDL task description from the latest accepted state, select one named action,
+    translate it into a command, pass it through the software supervisor and check the resulting state.\quad
+    {\color{mfjagreen}\bfseries Result:} planning and executing one action at a time until completion.};
+
+  \node[stage,below=4mm of s5] (s6) {%
+    {\color{mfjablue}\bfseries 6. Experiments and results}\par\smallskip
+    {\color{mfjaorange}\bfseries Engineering need:} measure scene estimation and confirm complete task behaviour.\quad
+    {\color{mfjablue}\bfseries Implementation:} use predefined image-data groups, evaluation measures, software
+    tests and 12 independent complete-task runs from a fresh start.\quad
+    {\color{mfjagreen}\bfseries Result:} recorded model performance and completed runs for valid tasks across both
+    rails, all eight shuttles and five task categories.};
+
+  \draw[flow] (s4.south) -- (s5.north);
+  \draw[flow] (s5.south) -- (s6.north);
+\end{tikzpicture}

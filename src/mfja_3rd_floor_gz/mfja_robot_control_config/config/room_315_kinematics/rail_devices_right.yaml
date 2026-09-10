@@ -1,0 +1,149 @@
+schema_version: 1
+rail_side: right
+description: Room 315 right-rail user-editable slots, sensors, and stoppers.
+slots:
+- name: slot_1
+  segment: A12E
+  s_ratio: 0.411866742
+- name: slot_2
+  segment: A12E
+  s_ratio: 0.653073633
+- name: slot_3
+  segment: A34E
+  s_ratio: 0.447469343
+- name: slot_4
+  segment: A34E
+  s_ratio: 0.683726992
+position_sensors:
+# DZI feedback uses only segment+s_ratio+radius_m below.
+- name: DZI2R
+  segment: A12E
+  s_ratio: 0.653073633
+  radius_m: 0.09
+- name: DZI1R
+  segment: A12E
+  s_ratio: 0.411866742
+  radius_m: 0.09
+- name: DZI4R
+  segment: A34E
+  s_ratio: 0.683726992
+  radius_m: 0.09
+- name: DZI3R
+  segment: A34E
+  s_ratio: 0.447469343
+  radius_m: 0.09
+- name: DA3R
+  switch: A3
+  segment: A23
+  s_ratio: 1.0
+  radius_m: 0.08
+- name: DA3ER
+  switch: A3
+  branch: E
+  segment: A3E
+  s_ratio: 0.919775213
+  radius_m: 0.07
+- name: DA3IR
+  switch: A3
+  branch: I
+  segment: A34I
+  s_ratio: 0.027598135
+  radius_m: 0.07
+- name: DA4R
+  switch: A4
+  radius_m: 0.08
+  points:
+  - segment: A4E
+    s_ratio: 0.969477997
+  - segment: A4I
+    s_ratio: 0.969477997
+- name: DA4ER
+  switch: A4
+  branch: E
+  segment: A34E
+  s_ratio: 0.999578562
+  radius_m: 0.08
+- name: DA4IR
+  switch: A4
+  branch: I
+  segment: A4I
+  s_ratio: 0.008590209
+  radius_m: 0.08
+- name: DA1R
+  switch: A1
+  segment: A14
+  s_ratio: 0.996442416
+  radius_m: 0.08
+- name: DA1ER
+  switch: A1
+  branch: E
+  segment: A1E
+  s_ratio: 0.986943769
+  radius_m: 0.07
+- name: DA1IR
+  switch: A1
+  branch: I
+  segment: A1I
+  s_ratio: 0.970647105
+  radius_m: 0.07
+- name: DA2R
+  switch: A2
+  segment: A2E
+  s_ratio: 0.101150462
+  radius_m: 0.07
+- name: DA2ER
+  switch: A2
+  branch: E
+  segment: A12E
+  s_ratio: 0.94125
+  radius_m: 0.08
+- name: DA2IR
+  switch: A2
+  branch: I
+  segment: A12I
+  s_ratio: 0.872376235
+  radius_m: 0.08
+# Stopper-linked position sensors are derived from the matching stopper point.
+- name: A3_STOPPER_SENSOR
+  stopper: A3
+  before_stopper_m: 0.1
+  radius_m: 0.08
+- name: A4_STOPPER_SENSOR
+  stopper: A4
+  before_stopper_m: 0.1
+  radius_m: 0.08
+- name: A1_STOPPER_SENSOR
+  stopper: A1
+  before_stopper_m: 0.1
+  radius_m: 0.08
+- name: A2_STOPPER_SENSOR
+  stopper: A2
+  before_stopper_m: 0.1
+  radius_m: 0.08
+stoppers:
+- name: A3
+  before_switch: A3
+  segment: A23
+  s_ratio: 0.711151221
+  default_state: '0'
+- name: A4
+  before_switch: A4
+  default_state: '0'
+  points:
+  - segment: A34E
+    s_ratio: 0.964078719
+  - segment: A34I
+    s_ratio: 0.943533612
+- name: A1
+  before_switch: A1
+  segment: A14
+  s_ratio: 0.937923811
+  default_state: '0'
+- name: A2
+  before_switch: A2
+  default_state: '0'
+  points:
+  - segment: A12E
+    s_ratio: 0.964090232
+  - segment: A12I
+    s_ratio: 0.943278327

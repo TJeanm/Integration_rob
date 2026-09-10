@@ -1,0 +1,71 @@
+*~
+build/
+install/
+log/
+.codex/
+.codex
+__pycache__/
+*.pyc
+*.gguf
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+.venv/
+venv/
+.cache/
+*.aux
+*.log
+*.out
+*.toc
+generated/
+room315_shuttle_rail_report_ar.html
+room315_shuttle_rail_report_ar.pdf
+/6/
+/=1
+/Modélisation salle 314/
+/Modélisation salle 315-20260305/
+/mfja_robot_control_config/log/
+/mfja_robot_control_config/config/room_315_kinematics/continuous_path_report.yaml
+/mfja_robot_control_config/config/room_315_kinematics/debug_plots/
+/mfja_robot_control_config/config/room_315_kinematics/report_figures/
+/mfja_robot_control_config/config/room_315_kinematics/report_figures.zip
+/multi_robot_usage_guide.*
+/rail_switch_integration_report.*
+
+# Local explanation exports
+*_explanation_ar.html
+/mfja_3rd_floor_bringup/launch/exp/
+/mfja_rail_interfaces/exp/
+/mfja_robot_control_config/config/room_315_kinematics/*_explanation_ar.html
+reports/
+/report_ar/
+/report/main.pdf
+/report/main.bbl
+/report/main.blg
+/report/main.lof
+/report/main.lot
+/report/baseline/
+/report/final_rendered/
+/report/html_assets/
+/report/report_figures_tables_code_guide.html
+/report/evidence/superseded_not_reported/
+/report/evidence/room315_visual_runtime_v4_2026-08-11/
+/report/evidence/room315_integrated_campaign_v2/cases/*/rosbag/*.mcap
+
+# Keep checksum-bound runtime logs that support the versioned English report.
+!/report/evidence/**/*.log
+
+# Local notes and generated HTML exports
+memory.md
+*_AR.*
+*_ar.*
+*arabic*
+*Arabic*
+*[اأإآء-ي]*
+*.html
+!runbook.html
+!room315_closed_loop_runbook.html
+
+# Defense presentation files
+/defense_presentation*/

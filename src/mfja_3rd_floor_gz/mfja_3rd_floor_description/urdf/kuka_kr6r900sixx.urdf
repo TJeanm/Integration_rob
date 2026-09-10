@@ -1,0 +1,220 @@
+<?xml version="1.0"?>
+<robot name="kuka_kr6r900sixx">
+  <material name="kuka_orange">
+    <color rgba="0.93 0.45 0.1 1.0"/>
+  </material>
+  <material name="kuka_dark">
+    <color rgba="0.18 0.18 0.18 1.0"/>
+  </material>
+  <material name="schunk_dark">
+    <color rgba="0.22 0.23 0.23 1.0"/>
+  </material>
+
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <mesh filename="package://mfja_3rd_floor_description/models/kuka_kr6r900sixx/meshes/converted_visual/base_link.stl"/>
+      </geometry>
+      <material name="kuka_dark"/>
+    </visual>
+  </link>
+
+  <link name="link_1">
+    <visual>
+      <geometry>
+        <mesh filename="package://mfja_3rd_floor_description/models/kuka_kr6r900sixx/meshes/converted_visual/link_1.stl"/>
+      </geometry>
+      <material name="kuka_orange"/>
+    </visual>
+  </link>
+
+  <link name="link_2">
+    <visual>
+      <geometry>
+        <mesh filename="package://mfja_3rd_floor_description/models/kuka_kr6r900sixx/meshes/converted_visual/link_2.stl"/>
+      </geometry>
+      <material name="kuka_orange"/>
+    </visual>
+  </link>
+
+  <link name="link_3">
+    <visual>
+      <geometry>
+        <mesh filename="package://mfja_3rd_floor_description/models/kuka_kr6r900sixx/meshes/converted_visual/link_3.stl"/>
+      </geometry>
+      <material name="kuka_orange"/>
+    </visual>
+  </link>
+
+  <link name="link_4">
+    <visual>
+      <geometry>
+        <mesh filename="package://mfja_3rd_floor_description/models/kuka_kr6r900sixx/meshes/converted_visual/link_4.stl"/>
+      </geometry>
+      <material name="kuka_orange"/>
+    </visual>
+  </link>
+
+  <link name="link_5">
+    <visual>
+      <geometry>
+        <mesh filename="package://mfja_3rd_floor_description/models/kuka_kr6r900sixx/meshes/converted_visual/link_5.stl"/>
+      </geometry>
+      <material name="kuka_orange"/>
+    </visual>
+  </link>
+
+  <link name="link_6">
+    <visual>
+      <geometry>
+        <mesh filename="package://mfja_3rd_floor_description/models/kuka_kr6r900sixx/meshes/converted_visual/link_6.stl"/>
+      </geometry>
+      <material name="kuka_dark"/>
+    </visual>
+  </link>
+
+  <link name="flange"/>
+  <link name="base"/>
+  <link name="tool0"/>
+  <link name="gripper">
+    <visual>
+      <origin xyz="0 0 0.015" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.140 0.036 0.030"/>
+      </geometry>
+      <material name="schunk_dark"/>
+    </visual>
+    <visual>
+      <origin xyz="-0.046 0.020 0.0315" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.063 0.008 0.022"/>
+      </geometry>
+      <material name="kuka_dark"/>
+    </visual>
+  </link>
+  <link name="gripper_left_jaw">
+    <inertial>
+      <origin xyz="-0.02975 0 0.0394" rpy="0 0 0"/>
+      <mass value="0.1"/>
+      <inertia ixx="0.000038" ixy="0" ixz="0" iyy="0.000047" iyz="0" izz="0.000030"/>
+    </inertial>
+    <visual>
+      <origin xyz="-0.047 0.015 0.021" rpy="-1.57079632679 0 3.14159265359"/>
+      <geometry>
+        <mesh filename="package://mfja_3rd_floor_description/models/kuka_kr6r900sixx/meshes/gripper/jaw_kuka.stl" scale="1 1 1"/>
+      </geometry>
+      <material name="schunk_dark"/>
+    </visual>
+  </link>
+  <link name="gripper_right_jaw">
+    <inertial>
+      <origin xyz="0.02975 0 0.0394" rpy="0 0 0"/>
+      <mass value="0.1"/>
+      <inertia ixx="0.000038" ixy="0" ixz="0" iyy="0.000047" iyz="0" izz="0.000030"/>
+    </inertial>
+    <visual>
+      <origin xyz="0.047 -0.015 0.021" rpy="-1.57079632679 0 0"/>
+      <geometry>
+        <mesh filename="package://mfja_3rd_floor_description/models/kuka_kr6r900sixx/meshes/gripper/jaw_kuka.stl" scale="1 1 1"/>
+      </geometry>
+      <material name="schunk_dark"/>
+    </visual>
+  </link>
+  <link name="gripper_tcp"/>
+
+  <joint name="joint_a1" type="revolute">
+    <origin xyz="0 0 0.400" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="link_1"/>
+    <axis xyz="0 0 -1"/>
+    <limit lower="-2.96706" upper="2.96706" effort="400" velocity="6.28319"/>
+  </joint>
+
+  <joint name="joint_a2" type="revolute">
+    <origin xyz="0.025 0 0" rpy="0 0 0"/>
+    <parent link="link_1"/>
+    <child link="link_2"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.31613" upper="0.7854" effort="400" velocity="5.23599"/>
+  </joint>
+
+  <joint name="joint_a3" type="revolute">
+    <origin xyz="0.455 0 0" rpy="0 0 0"/>
+    <parent link="link_2"/>
+    <child link="link_3"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-2.0944" upper="2.72271" effort="300" velocity="6.28319"/>
+  </joint>
+
+  <joint name="joint_a4" type="revolute">
+    <origin xyz="0 0 0.035" rpy="0 0 0"/>
+    <parent link="link_3"/>
+    <child link="link_4"/>
+    <axis xyz="-1 0 0"/>
+    <limit lower="-3.22886" upper="3.22886" effort="300" velocity="6.6497"/>
+  </joint>
+
+  <joint name="joint_a5" type="revolute">
+    <origin xyz="0.420 0 0" rpy="0 0 0"/>
+    <parent link="link_4"/>
+    <child link="link_5"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-2.0944" upper="2.0944" effort="250" velocity="6.77188"/>
+  </joint>
+
+  <joint name="joint_a6" type="revolute">
+    <origin xyz="0.080 0 0" rpy="0 0 0"/>
+    <parent link="link_5"/>
+    <child link="link_6"/>
+    <axis xyz="-1 0 0"/>
+    <limit lower="-6.10865" upper="6.10865" effort="200" velocity="10.73377"/>
+  </joint>
+
+  <joint name="joint_a6_flange" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="link_6"/>
+    <child link="flange"/>
+  </joint>
+
+  <joint name="base_link_base" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="base"/>
+  </joint>
+
+  <joint name="flange_tool0" type="fixed">
+    <origin xyz="0 0 0" rpy="0 1.57079632679 0"/>
+    <parent link="flange"/>
+    <child link="tool0"/>
+  </joint>
+
+  <joint name="tool0_gripper" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="tool0"/>
+    <child link="gripper"/>
+  </joint>
+
+  <joint name="gripper_left_jaw_joint" type="prismatic">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="gripper"/>
+    <child link="gripper_left_jaw"/>
+    <axis xyz="-1 0 0"/>
+    <limit lower="0" upper="0.030" effort="150" velocity="0.18"/>
+    <dynamics damping="0.5" friction="0.0"/>
+  </joint>
+
+  <joint name="gripper_right_jaw_joint" type="prismatic">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="gripper"/>
+    <child link="gripper_right_jaw"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="0" upper="0.030" effort="150" velocity="0.18"/>
+    <dynamics damping="0.5" friction="0.0"/>
+  </joint>
+
+  <joint name="gripper_tcp_joint" type="fixed">
+    <origin xyz="0 0 0.068" rpy="0 0 0"/>
+    <parent link="gripper"/>
+    <child link="gripper_tcp"/>
+  </joint>
+</robot>

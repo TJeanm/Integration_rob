@@ -1,0 +1,349 @@
+\chapter[AI Inputs: English and Visual-State Learning]
+{Developing the AI Inputs: English Understanding and Visual-State Learning}
+\label{chap:ai-development}
+
+\chapterguide{Learned models could assist with task and scene interpretation,
+but neither was allowed to issue commands. I therefore built a constrained
+English interface and a rail-isolated visual estimator that supply the planner
+with two checked records.}
+
+\contributionboundary
+  {The starting repository contained no Room~315 language pipeline,
+  paired-camera corpus or trained visual-state estimator.}
+  {The supervisors supplied platform knowledge and reviewed the methods and
+  claims.}
+  {I integrated Qwen2.5-1.5B-Instruct \citep{qwen25,qwen25gguf} through
+  \code{llama-cpp-python} v0.3.16 and \code{llama.cpp}
+  \citep{llamacpppython,llamacpp}. I also reused TorchVision's
+  ImageNet-pretrained ResNet-18
+  \citep{torchvisionresnet18,resnet,imagenet}; I did not develop these external
+  models or tools.}
+  {I developed the constrained language contract and dialogue pipeline,
+  generated and partitioned the paired-camera corpus, trained the rail-isolated
+  V4 estimator from my V3 checkpoint, and integrated its hash-bound runtime.}
+  {I ran the pinned ten-case language evaluation, the Validation and
+  post-selection regression checks, and the preregistered one-shot Final Test
+  reported in \cref{chap:results}.}
+
+\section{Building the English task interface}
+
+\subsection{Local model selection and configuration}
+
+Qwen2.5-1.5B-Instruct is the pretrained model selected for the interface
+\citep{qwen25}. In my pipeline, it proposes structured task fields from English
+requests. I ran the quantised GGUF file distributed in the official model card
+\citep{qwen25gguf} locally on the CPU through \code{llama-cpp-python} v0.3.16,
+a Python binding for \code{llama.cpp} \citep{llamacpppython,llamacpp}. I did not
+fine-tune the model. The exact deterministic inference configuration and
+artefact identity are indexed through \cref{app:reproducibility}.
+
+Without fine-tuning, a versioned prompt constrains the model to one
+\code{SemanticParseEnvelope} JavaScript Object Notation (JSON) object over permitted task fields,
+identities, rails, stations and slots; it excludes PDDL, plan steps and device
+or shuttle commands.
+
+\subsection{From model output to a confirmed task}
+
+A rule-based extractor records explicit facts (for example, shuttle colour,
+rail or slot), Qwen proposes intent fields, and fixed-precedence fusion prevents
+the proposal from overwriting explicit or confirmed context. The resulting
+non-executable \code{TaskGoalDraft} is clarified, domain-validated and confirmed
+before an immutable \code{TaskGoal} is issued.
+
+For the indirect request ``Could you get a loaded shuttle over to the right
+slot~4?'', the saved record shows the model supplying
+\code{goal\_type=transport} and deterministic fusion/validation constraining
+side, payload and destination. The ten-case evaluation is reported in
+\cref{sec:language-contract-evidence}.
+
+\section{Generating the Room~315 visual corpus}
+
+\subsection{Paired-camera corpus and partitioning}
+
+The generator enumerated all $2^8-1=255$ non-empty subsets of identities
+L1--L4/R1--R4 and produced eight geometrically varied scenes per subset by
+changing valid rail positions, payload states and switches. After each Gazebo
+scene settled, it captured one synchronised image per overhead camera: 2,040
+paired observations, or 4,080 RGB files. \Cref{fig:paired-camera-training}
+shows one input.
+
+One scene is one labelled paired-camera record; a visible-shuttle target is one
+present identity with complete supervision and is the denominator used for the
+per-shuttle metrics.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}[t]{0.485\textwidth}
+    \includegraphics[width=\textwidth]{f13_left_raw.png}
+    \caption{Left-camera RGB input}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.485\textwidth}
+    \includegraphics[width=\textwidth]{f13_right_raw.png}
+    \caption{Right-camera RGB input}
+  \end{subfigure}
+  \caption[Paired Room~315 camera observation used for visual training.]
+  {The two synchronised RGB images form the complete learned input for one
+  scenario. Simulator state is used to construct labels in a separate file and
+  is never appended to the image tensor.}
+  \label{fig:paired-camera-training}
+\end{figure}
+
+Gazebo identity, rail coordinate, payload state and projected box supply labels
+stored separately from image references. Only paired RGB images are model
+features; depth, controller state, point clouds and other oracle metadata remain
+label-generation data.
+
+\paragraph{Historical grouped protocol.}
+The predecessor V3 experiment kept all variants of a presence configuration in
+one partition. Its Validation selected epoch~14, and its Test was consumed once
+after selection on 30 July 2026; it is therefore historical evidence, not the
+current Final Test. Neither historical 256-scene partition directly enters V4,
+although V3's Validation-selected backbone provides indirect initialisation
+lineage. Current loaders denylist both historical partitions. Their split counts
+are summarised in \cref{app:technical}, while the audit record is indexed through
+\cref{app:reproducibility}.
+
+\subsection{Current training, Validation and regression-set roles}
+
+The current pool combines 1,528 legacy grouped-training scenes with 4,000
+training-only hard cases. Weighted sampling emphasises rare rail--segment cells,
+boundaries, switch zones and multi-blocker scenes. These cases were generated
+before Final Test access rather than mined from its errors.
+
+The separate hard-case Validation (512 scenes; 2,254 present targets) selected
+V4, drove patience and supplied temperature/segment-threshold fitting. Only
+after selection, the 256-scene post-selection regression set (1,085 targets)
+checked the frozen candidate for degradation; it affected neither selection nor
+calibration and is not Test evidence. Accessing the current Final Test remained prohibited
+throughout development; it supplies the principal evidence below.
+
+The labelled partitions were released only after the immutable attempt had
+completed; this later publication changes availability, not their experimental
+roles. \Cref{app:reproducibility} identifies the release.
+
+\section{Designing and training the visual-state estimator}
+
+The \emph{visual model} is the learned network; the \emph{visual-inference
+runtime} adds preprocessing and observation validation; the \emph{closed-loop
+runtime} further adds the task gateway, planner, supervisor and controllers.
+
+\paragraph{Evolution of the visual pipeline.}
+The early versions primarily evolved the data contract: V1 established
+paired-camera inputs while keeping simulator-derived labels outside the model
+input, and V2 added continuous along-rail localisation. V3 fixed the
+representation to the eight known shuttle identities, resized both cameras to
+$224\times224$, concatenated global features from a shared ImageNet-pretrained
+ResNet-18 and predicted 200 values through one head. Review of the hard-case
+behaviour exposed three mismatches between that contract and the known camera
+geometry and topology. \Cref{tab:v3-v4-design-response} maps each diagnosis to
+the corresponding V4 decision. V4 is the active visual model used by the
+evaluated runtime; its results are in \cref{sec:visual-v4-results}.
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.08}
+\caption{V3 limitations and the corresponding V4 design responses.}
+\label{tab:v3-v4-design-response}
+\begin{tabularx}{\textwidth}{@{}p{0.20\textwidth}p{0.31\textwidth}X@{}}
+\toprule
+\textbf{Design concern} & \textbf{V3 observation} & \textbf{V4 response}\\
+\midrule
+Image geometry & Squaring the native $4{:}3$ images to $224\times224$ changed
+their proportions & Aspect-preserving $320\times240$ preprocessing retains the
+camera geometry\\ \tablerowrule
+Rail interaction & Concatenated global features allowed one camera to influence
+the other rail's prediction & Low-level weights remain shared, but each rail has
+an independent late branch and identity queries\\ \tablerowrule
+Learned-state scope & One 200-value head also predicted side, metric position
+and segment length, although topology already fixes them & The model learns 168
+uncertain visual values; identity and topology derive the remaining quantities
+deterministically\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Rail-isolated 168-value learned contract}
+
+Each $4{:}3$ image is resized to $320\times240$, ImageNet-normalised and
+processed separately by shared ResNet-18 weights through \code{layer3}. Each
+rail then has its own \code{layer4} and four identity-query heads; no camera
+feature enters the other rail's late branch.
+
+For each of L1--L4/R1--R4, the model outputs 14 segment scores, two loaded-state
+scores, a four-value normalised box and one within-segment ratio: 21 values per
+identity and 168 in total. Identity and the decoded topology then determine
+side, segment length and metric position; these known quantities are not learned.
+The output composition is summarised in \cref{app:technical}; its exact ordering
+and diagnostic compatibility adapter remain in the model records indexed by
+\cref{app:reproducibility}.
+
+\begin{figure}[p]
+  \centering
+  \input{figures/f12_visual_model_contract_v2.tex}
+  \caption[Rail-isolated visual model and deterministic state derivation.]
+  {The model shares low-level ResNet-18 weights through \code{layer3}, then keeps
+  \code{layer4} and the four-query prediction head independent for each rail.
+  The model produces 168 learned values; side, segment length and $s_m$ are
+  derived deterministically before whole-observation validation.}
+  \label{fig:visual-model-contract}
+\end{figure}
+\FloatBarrier
+
+Presence is an independent input, not a prediction. Training masks any identity
+that is absent or lacks a required target. At runtime, every present identity
+must pass artefact, camera-order, freshness, vocabulary, numeric and confidence
+checks; any failure rejects the whole observation rather than publishing a
+partial state.
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\caption{Learned objectives and their role in the selected V4 training run.}
+\label{tab:visual-training-objectives}
+\begin{tabularx}{\textwidth}{@{}
+>{\raggedright\arraybackslash}p{0.22\textwidth}
+>{\raggedright\arraybackslash}p{0.16\textwidth}
+>{\raggedright\arraybackslash}X@{}}
+\toprule
+\textbf{Output} & \textbf{Loss weight} & \textbf{Role}\\
+\midrule
+Public segment & Cross-entropy, 4 & Primary discrete location used by symbolic
+planning\\ \tablerowrule
+Within-segment ratio & Smooth-L1, 2 & Continuous longitudinal refinement within
+the selected segment\\ \tablerowrule
+Loaded state & Cross-entropy, 1 & Payload constraint used for grounded task
+selection\\ \tablerowrule
+Bounding box & L1/generalised intersection over union (GIoU)
+\citep{giou}, 1 &
+Identity-localised visual support and diagnostic overlap\\ \tablerowrule
+Topology distance & Graph distance, 0.25 & Penalises mistakes according to their
+distance on the known route map\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Training and checkpoint selection}
+
+The V1--V3 visual-state development cycle was trained on the KAIROS cluster
+operated by CALMIP, using an NVIDIA GH200 GPU. The final V4 training,
+fine-tuning and evaluation were performed locally on an NVIDIA RTX~3080 Laptop
+GPU.
+
+Verified predecessor weights initialised the shared stem through \code{layer3}
+and each independent \code{layer4}; no joint head transferred, and rail-branch
+parameters, batch-normalisation running statistics (BatchNorm buffers) and
+query heads were optimised independently.
+
+The newly initialised query heads were trained before progressively exposing
+the deeper rail branches and shared stem. This reduced the chance that an
+unstable new head would immediately disturb inherited features. Appearance
+augmentation was allowed, whereas camera swaps and side-breaking flips were
+forbidden because they would violate the rail contract. The exact optimisation,
+sampling and evaluation controls are collected in
+\cref{tab:v4-training-controls}.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{1.04}
+\caption{Selected V4 optimisation, selection and evaluation controls.}
+\label{tab:v4-training-controls}
+\begin{tabularx}{\textwidth}{@{}
+>{\raggedright\arraybackslash}p{0.20\textwidth}
+>{\raggedright\arraybackslash}p{0.43\textwidth}
+>{\raggedright\arraybackslash}X@{}}
+\toprule
+\textbf{Control} & \textbf{Frozen setting} & \textbf{Purpose}\\
+\midrule
+Optimisation & AdamW \citep{adamw}; learning rates $3\times10^{-4}$ for the heads,
+$10^{-4}$ for \code{layer4} and $2\times10^{-5}$ for shared \code{layer3};
+weight decay $10^{-4}$ & Separate rates protect inherited low-level features\\
+\tablerowrule
+Staged unfreezing & Heads from epoch~1, independent \code{layer4} from epoch~2
+and shared \code{layer3} from epoch~4 & Introduce capacity from task-specific to
+shared features\\ \tablerowrule
+Epoch definition & 8,000 records sampled with replacement: 4,000 legacy and
+4,000 hard-case records; batch 24 and mixed precision & Keep both pools present
+while emphasising rare cells and boundaries\\ \tablerowrule
+Candidate selection & Planning score below, then worst rail--segment recall,
+then lowest 95th-percentile correct-segment position error; patience four & Choose one
+checkpoint from Validation using criteria fixed before training\\ \tablerowrule
+Evaluation firewall & Seed 31520260811; post-selection regression excluded from
+selection and calibration; Final Test unavailable until freeze & Prevent later
+evaluation data from influencing the selected model\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Macro F1 averages the class-wise harmonic mean of precision and recall, giving
+each segment class equal weight. The fixed Validation planning score was
+\[
+0.30F_{1,\mathrm{macro}}+0.15A_{\mathrm{min\,side}}
++0.20R_{\mathrm{worst\,cell}}+0.20A_{\mathrm{joint},0.05}
++0.075A_{\mathrm{switch}}+0.075A_{\mathrm{boundary}}.
+\]
+All 12 epochs completed, the procedure selected epoch~11 and the patience
+condition was not reached. The regression set could reject this frozen
+candidate but could neither choose a checkpoint nor tune it; the Final Test
+remained unavailable throughout.
+
+Validation also fitted the segment-score calibration and online acceptance
+floor. Loaded-state score remained uncalibrated. The runtime binds checkpoint,
+architecture, preprocessing, camera order and topology fingerprint before
+becoming ready. \Cref{tab:visual-threshold-map} separates these online checks
+from labelled offline tolerances; \cref{app:reproducibility} binds the exact
+selected-run artefacts.
+
+\subsection{Evidence after the V3-to-V4 redesign}
+
+The architectural diagnosis in the preceding sections was followed by a large
+change on the retained hard-case Validation comparison
+(\cref{tab:v3-v4-development-comparison}). The comparison is useful evidence of
+the complete redesign and current training protocol, but it is not a controlled
+ablation: resizing, branch isolation, output definition, data weighting and
+training schedule changed together. It therefore does not prove how much of the
+improvement came from any one change.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Development comparison before and after the V4 redesign.}
+\label{tab:v3-v4-development-comparison}
+\begin{tabularx}{\textwidth}{@{}p{0.36\textwidth}p{0.20\textwidth}p{0.20\textwidth}X@{}}
+\toprule
+\textbf{Hard-case Validation measure} & \textbf{V3} & \textbf{V4} &
+\textbf{Change}\\
+\midrule
+Public-segment top-1 accuracy & 51.6415\% & 99.9113\% & +48.2698 points\\
+\tablerowrule
+Loaded-state accuracy & 66.1934\% & 99.8669\% & +33.6735 points\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The comparison was development evidence: it justified carrying V4, rather than
+V3, into the frozen qualification sequence, but it was not counted as Final-Test
+performance. I stopped redesigning only after the selected epoch also met the
+predeclared Validation and post-selection regression gates and its artefact,
+preprocessing and topology identities were frozen. The independent
+opposite-camera blank/shuffle check later changed own-side V4 outputs by zero at
+recorded precision, supporting the intended rail isolation. Passing these gates
+defined the decision to test the model; they were selection controls rather
+than a guarantee of future predictions.
+
+\subsection{Preregistered Final Test}
+
+Before evaluation, I froze the checkpoint, scenario plan, evaluator, thresholds
+and single-run policy. No Final-Test result could alter training, checkpoint
+selection, calibration or thresholds. Here, \emph{preregistered} means that the
+repository controls and hashes were fixed before any Test prediction, not that
+the protocol was registered externally. The one-shot method, audit and results
+are reported in \cref{sec:visual-v4-results}; their records are indexed through
+\cref{app:reproducibility}.
+
+The final AI layer emits only a confirmed task and scene record; deterministic
+planning and supervision remain responsible for commands. The V3 failures
+motivated the rail-isolated V4 design, whose frozen evaluation covers only the
+known fleet and fixed Gazebo cameras (\cref{sec:visual-v4-results}).

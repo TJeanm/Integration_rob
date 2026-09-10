@@ -1,0 +1,593 @@
+cmake_minimum_required(VERSION 3.28.0)
+project(mfja_robot_control_config)
+
+find_package(ament_cmake REQUIRED)
+
+install(
+  DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+  PATTERN "__pycache__" EXCLUDE
+  PATTERN "*.pyc" EXCLUDE
+)
+
+install(
+  FILES
+    config/gazebo_params.yaml
+    config/gripper_command_defaults.yaml
+    config/mfja_default.gui.config
+    config/mfja_light.gui.config
+    config/room315_runtime_safe.gui.config
+    config/robots.yaml
+    config/robots_room_315_only.yaml
+  DESTINATION share/${PROJECT_NAME}/config
+)
+
+install(
+  FILES
+    config/room_315_visual_state/README.md
+    config/room_315_visual_state/blocker_training_scenarios.yaml
+    config/room_315_visual_state/training_scenarios.yaml
+    config/room_315_visual_state/visual_observed_state_calibration.yaml
+    config/room_315_visual_state/visual_state_experiment_a_dataset_v3.yaml
+    config/room_315_visual_state/visual_state_experiment_a_dataset_v3r1.yaml
+    config/room_315_visual_state/visual_state_final_test_v4.json
+    config/room_315_visual_state/visual_state_final_test_v4_coverage_compat_v1.json
+    config/room_315_visual_state/visual_state_final_test_v4_coverage_extension.json
+    config/room_315_visual_state/visual_state_runtime.yaml
+    config/room_315_visual_state/visual_state_training_v4.json
+  DESTINATION share/${PROJECT_NAME}/config/room_315_visual_state
+)
+
+install(
+  FILES
+    config/room_315_payload_cases/payload_training_cases_expanded_160_speed_sweep.yaml
+    config/room_315_payload_cases/payload_scenarios.yaml
+  DESTINATION share/${PROJECT_NAME}/config/room_315_payload_cases
+)
+
+install(
+  FILES
+    config/room_315_shuttle_identity/shuttle_identity.yaml
+  DESTINATION share/${PROJECT_NAME}/config/room_315_shuttle_identity
+)
+
+install(
+  FILES
+    config/room_315_task_execution/rail_safety_supervisor.yaml
+    config/room_315_task_execution/task_execution_runtime.yaml
+    config/room_315_task_execution/task_execution_runtime_v4.yaml
+  DESTINATION share/${PROJECT_NAME}/config/room_315_task_execution
+)
+
+install(
+  FILES
+    config/room_315_task_goal/task_goal_english_benchmark.yaml
+    config/room_315_task_goal/task_goal_understanding.yaml
+  DESTINATION share/${PROJECT_NAME}/config/room_315_task_goal
+)
+
+install(
+  DIRECTORY config/room_315_planning/pddl
+  DESTINATION share/${PROJECT_NAME}/config/room_315_planning
+)
+
+install(
+  FILES
+    config/room_315_kinematics/README.md
+    config/room_315_kinematics/rail_devices_left.yaml
+    config/room_315_kinematics/rail_devices_right.yaml
+    config/room_315_kinematics/rail_network_left.yaml
+    config/room_315_kinematics/rail_network_right.yaml
+  DESTINATION share/${PROJECT_NAME}/config/room_315_kinematics
+)
+
+install(
+  DIRECTORY
+    config/room_315_kinematics/raw_segments
+  DESTINATION share/${PROJECT_NAME}/config/room_315_kinematics
+)
+
+install(
+  PROGRAMS
+    scripts/conveyor_loop_mode_controller.py
+    scripts/presentation_left_slot3_kuka_slot2.py
+    scripts/robot_gripper_command.py
+    scripts/robot_joint_command.py
+    scripts/setup_room315_intent_model.py
+    scripts/room_315_contracts.py
+    scripts/room_315_closed_loop_executive.py
+    scripts/room_315_device_position_tool.py
+    scripts/room_315_kinematic_shuttle.py
+    scripts/room_315_kinematic_shuttle_node.py
+    scripts/room_315_kairos_package_checks.py
+    scripts/room_315_json_io.py
+    scripts/room_315_multi_shuttle.py
+    scripts/room_315_observed_state_provider.py
+    scripts/room_315_pddl_dataset_report.py
+    scripts/room_315_pddl_language_generator.py
+    scripts/room_315_pddl_plan_translator.py
+    scripts/room_315_pddl_scenario_generator.py
+    scripts/room_315_pddl_validation_gate.py
+    scripts/room_315_rail_devices.py
+    scripts/room_315_rail_defaults.py
+    scripts/room_315_shuttle_geometry.py
+    scripts/room_315_payload_case_batch_runner.py
+    scripts/room_315_payload_case_review.py
+    scripts/room_315_presence_provider.py
+    scripts/room_315_runtime_contracts.py
+    scripts/room_315_build_runtime_candidate.py
+    scripts/room_315_build_runtime_candidate_v4.py
+    scripts/room_315_promote_runtime_v4.py
+    scripts/room_315_authorize_runtime_v4_closed_loop.py
+    scripts/room_315_v4_closed_loop_fault_campaign.py
+    scripts/room_315_runtime_acceptance_readiness.py
+    scripts/room_315_runtime_acceptance_recorder.py
+    scripts/room_315_runtime_acceptance_report.py
+    scripts/room_315_runtime_acceptance_campaign_v4.py
+    scripts/room_315_task_goal_builder.py
+    scripts/room_315_task_goal_benchmark.py
+    scripts/room_315_task_goal_cli.py
+    scripts/room_315_task_goal_dialogue.py
+    scripts/room_315_task_goal_fusion.py
+    scripts/room_315_task_goal_parsers.py
+    scripts/room_315_task_goal_schema.py
+    scripts/room_315_task_goal_semantic.py
+    scripts/room_315_task_goal_semantic_smoke.py
+    scripts/room_315_task_goal_validation.py
+    scripts/room_315_task_execution.py
+    scripts/room_315_task_execution_config.py
+    scripts/room_315_task_execution_node.py
+    scripts/room_315_visual_planning_benchmark_suite.py
+    scripts/room_315_visual_state_dataset_recorder.py
+    scripts/room_315_visual_training_event_extractor.py
+    scripts/room_315_visual_obstacle_tool.py
+    scripts/room_315_privileged_shuttle_identity_tracker.py
+    scripts/room_315_visual_state_split_dataset.py
+    scripts/room_315_rail_safety_supervisor.py
+    scripts/room_315_visual_state_train_local.py
+    scripts/room_315_visual_state_to_lerobot.py
+    scripts/room_315_arbitrary_subset_visual.py
+    scripts/room_315_arbitrary_subset_visual_v2.py
+    scripts/room_315_arbitrary_subset_capture_v2.py
+    scripts/room_315_grouped_visual_splits.py
+    scripts/room_315_dataset_partition_overlap_post_hoc.py
+    scripts/room_315_experiment_a_v3r1_package.py
+    scripts/room_315_experiment_a_v3r1_corrected_package.py
+    scripts/room_315_kairos_visual_training_package.py
+    scripts/room_315_visual_observed_state_provider.py
+    scripts/room_315_visual_error_analysis.py
+    scripts/room_315_visual_fleet.py
+    scripts/room_315_visual_manual_review.py
+    scripts/room_315_visual_label_exporter.py
+    scripts/room_315_visual_dataset_audit.py
+    scripts/room_315_visual_state_capture.py
+    scripts/room_315_visual_state_dataset.py
+    scripts/room_315_visual_model.py
+    scripts/room_315_visual_model_v4.py
+    scripts/room_315_visual_contract_v4.py
+    scripts/room_315_visual_calibration_v4.py
+    scripts/room_315_visual_acceptance_v4.py
+    scripts/room_315_visual_training_v4.py
+    scripts/room_315_visual_runtime.py
+    scripts/room_315_visual_runtime_v4.py
+    scripts/room_315_visual_runtime_v4_fault_injection.py
+    scripts/room_315_visual_runtime_cpu_smoke.py
+    scripts/room_315_visual_runtime_fusion.py
+    scripts/room_315_visual_runtime_validation.py
+    scripts/room_315_visual_scenario_generator.py
+    scripts/room_315_visual_scenario_runner.py
+    scripts/room_315_visual_smoke_report.py
+    scripts/room_315_visual_shadow_compare.py
+    scripts/room_315_visual_v4_final_test.py
+    scripts/room_315_visual_state_inference_node.py
+    scripts/room_315_visual_state_smoke.py
+    scripts/room_315_visual_v3_audit.py
+    scripts/room_315_visual_v3_capture.py
+    scripts/room_315_visual_v3_common.py
+    scripts/room_315_visual_v3_generator.py
+    scripts/room_315_visual_v3_pipeline.py
+    scripts/room_315_visual_v3_quota_planner.py
+    scripts/room_315_visual_v3_splitter.py
+    scripts/room_315_visual_v3r1_audit.py
+    scripts/room_315_visual_v3r1_capture.py
+    scripts/room_315_visual_v3r1_common.py
+    scripts/room_315_visual_v3r1_generator.py
+    scripts/room_315_visual_v3r1_pipeline.py
+    scripts/room_315_visual_v3r1_quota_planner.py
+    scripts/room_315_visual_v3r1_reuse.py
+    scripts/room_315_visual_v3r1_splitter.py
+    scripts/room_315_visual_state_train_v4.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  execute_process(
+    COMMAND "${Python3_EXECUTABLE}" -c "import torch"
+    RESULT_VARIABLE ROOM315_TORCH_TESTS_AVAILABLE
+    OUTPUT_QUIET
+    ERROR_QUIET
+  )
+
+  ament_add_pytest_test(
+    test_room315_runtime_candidate
+    test/test_room315_runtime_candidate.py
+  )
+
+  ament_add_pytest_test(
+    test_room315_runtime_acceptance
+    test/test_room315_runtime_acceptance.py
+    TIMEOUT 60
+  )
+
+  ament_add_pytest_test(
+    test_room315_experiment_a_v3r1
+    test/test_room315_experiment_a_v3r1.py
+  )
+
+  ament_add_pytest_test(
+    test_room315_visual_v3r1_dataset
+    test/test_room315_visual_v3r1_dataset.py
+  )
+  ament_add_pytest_test(
+    test_room315_dataset_partition_overlap_post_hoc
+    test/test_room315_dataset_partition_overlap_post_hoc.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_v3_dataset
+    test/test_room315_visual_v3_dataset.py
+  )
+  ament_add_pytest_test(
+    test_robot_gripper_bridge
+    test/test_robot_gripper_bridge.py
+  )
+  ament_add_pytest_test(
+    test_robot_gripper_command
+    test/test_robot_gripper_command.py
+  )
+  ament_add_pytest_test(
+    test_gripper_range_launch
+    test/test_gripper_range_launch.py
+  )
+  ament_add_pytest_test(
+    test_robot_joint_command
+    test/test_robot_joint_command.py
+  )
+  ament_add_pytest_test(
+    test_mobile_robot_frame_isolation
+    test/test_mobile_robot_frame_isolation.py
+  )
+  ament_add_pytest_test(
+    test_room315_device_marker_lifecycle
+    test/test_room315_device_marker_lifecycle.py
+  )
+  ament_add_pytest_test(
+    test_room315_contracts
+    test/test_room315_contracts.py
+  )
+  ament_add_pytest_test(
+    test_room315_observed_state_provider
+    test/test_room315_observed_state_provider.py
+  )
+  ament_add_pytest_test(
+    test_room315_task_goal_builder
+    test/test_room315_task_goal_builder.py
+  )
+  ament_add_pytest_test(
+    test_room315_task_goal_semantic_gateway
+    test/test_room315_task_goal_semantic_gateway.py
+  )
+  ament_add_pytest_test(
+    test_room315_task_goal_validation
+    test/test_room315_task_goal_validation.py
+  )
+  ament_add_pytest_test(
+    test_room315_pddl_runtime_input_hardening
+    test/test_room315_pddl_runtime_input_hardening.py
+  )
+  ament_add_pytest_test(
+    test_room315_task_execution
+    test/test_room315_task_execution.py
+  )
+  ament_add_pytest_test(
+    test_room315_task_execution_config
+    test/test_room315_task_execution_config.py
+  )
+  ament_add_pytest_test(
+    test_room315_task_execution_authorization
+    test/test_room315_task_execution_authorization.py
+  )
+  ament_add_pytest_test(
+    test_room315_v4_closed_loop_fault_campaign
+    test/test_room315_v4_closed_loop_fault_campaign.py
+  )
+  ament_add_pytest_test(
+    test_room315_authorize_runtime_v4_closed_loop
+    test/test_room315_authorize_runtime_v4_closed_loop.py
+  )
+  ament_add_pytest_test(
+    test_room315_closed_loop_executive
+    test/test_room315_closed_loop_executive.py
+  )
+  ament_add_pytest_test(
+    test_room315_closed_loop_executive_ros_integration
+    test/test_room315_closed_loop_executive_ros_integration.py
+  )
+  ament_add_pytest_test(
+    test_presentation_left_slot3_kuka_slot2
+    test/test_presentation_left_slot3_kuka_slot2.py
+  )
+  ament_add_pytest_test(
+    test_room315_rail_devices
+    test/test_room315_rail_devices.py
+  )
+  ament_add_pytest_test(
+    test_room315_kinematic_shuttle_core
+    test/test_room315_kinematic_shuttle_core.py
+  )
+  ament_add_pytest_test(
+    test_room315_segment_csv_normalization
+    test/test_room315_segment_csv_normalization.py
+  )
+  ament_add_pytest_test(
+    test_room315_pddl_planning
+    test/test_room315_pddl_planning.py
+  )
+  ament_add_pytest_test(
+    test_room315_pddl_language_generator
+    test/test_room315_pddl_language_generator.py
+  )
+  ament_add_pytest_test(
+    test_room315_pddl_dataset_report
+    test/test_room315_pddl_dataset_report.py
+  )
+  ament_add_pytest_test(
+    test_room315_pddl_plan_translator
+    test/test_room315_pddl_plan_translator.py
+  )
+  ament_add_pytest_test(
+    test_room315_pddl_planner_backend
+    test/test_room315_pddl_planner_backend.py
+  )
+  ament_add_pytest_test(
+    test_room315_pddl_scenario_generator
+    test/test_room315_pddl_scenario_generator.py
+    TIMEOUT 180
+  )
+  ament_add_pytest_test(
+    test_room315_multi_shuttle_registry
+    test/test_room315_multi_shuttle_registry.py
+  )
+  ament_add_pytest_test(
+    test_room315_fleet_supervisor_safety
+    test/test_room315_fleet_supervisor_safety.py
+  )
+  ament_add_pytest_test(
+    test_room315_block_reservation_runtime
+    test/test_room315_block_reservation_runtime.py
+  )
+  ament_add_pytest_test(
+    test_room315_headway_safety
+    test/test_room315_headway_safety.py
+  )
+  ament_add_pytest_test(
+    test_room315_shuttle_identity_config
+    test/test_room315_shuttle_identity_config.py
+  )
+  ament_add_pytest_test(
+    test_room315_shuttle_identity_visual_assets
+    test/test_room315_shuttle_identity_visual_assets.py
+  )
+  ament_add_pytest_test(
+    test_room315_shuttle_identity_tracker
+    test/test_room315_shuttle_identity_tracker.py
+  )
+  ament_add_pytest_test(
+    test_room315_multi_shuttle_dataset_recorder
+    test/test_room315_multi_shuttle_dataset_recorder.py
+  )
+  ament_add_pytest_test(
+    test_room315_payload_occlusion_metadata
+    test/test_room315_payload_occlusion_metadata.py
+  )
+  ament_add_pytest_test(
+    test_room315_payload_models
+    test/test_room315_payload_models.py
+  )
+  ament_add_pytest_test(
+    test_room315_shuttle_payload_visuals
+    test/test_room315_shuttle_payload_visuals.py
+  )
+  ament_add_pytest_test(
+    test_room315_identity_keepout_zones
+    test/test_room315_identity_keepout_zones.py
+  )
+  ament_add_pytest_test(
+    test_room315_multi_shuttle_pddl_planning
+    test/test_room315_multi_shuttle_pddl_planning.py
+  )
+  ament_add_pytest_test(
+    test_room315_multi_shuttle_dataset_report
+    test/test_room315_multi_shuttle_dataset_report.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_model_input_boundary
+    test/test_room315_visual_model_input_boundary.py
+  )
+  ament_add_pytest_test(
+    test_room315_multi_shuttle_launch_args
+    test/test_room315_multi_shuttle_launch_args.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_planning_benchmark_suite
+    test/test_room315_visual_planning_benchmark_suite.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_state_dataset_recorder
+    test/test_room315_visual_state_dataset_recorder.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_training_event_extractor
+    test/test_room315_visual_training_event_extractor.py
+  )
+  ament_add_pytest_test(
+    test_room315_rail_safety_supervisor
+    test/test_room315_rail_safety_supervisor.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_state_training_tools
+    test/test_room315_visual_state_training_tools.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_observed_state_provider
+    test/test_room315_visual_observed_state_provider.py
+  )
+  ament_add_pytest_test(
+    test_room315_arbitrary_subset_visual
+    test/test_room315_arbitrary_subset_visual.py
+  )
+  ament_add_pytest_test(
+    test_room315_arbitrary_subset_visual_v2
+    test/test_room315_arbitrary_subset_visual_v2.py
+    TIMEOUT 180
+  )
+  ament_add_pytest_test(
+    test_room315_arbitrary_subset_capture_v2
+    test/test_room315_arbitrary_subset_capture_v2.py
+    TIMEOUT 600
+  )
+  ament_add_pytest_test(
+    test_room315_camera_bbox_semantics
+    test/test_room315_camera_bbox_semantics.py
+    TIMEOUT 120
+  )
+  ament_add_pytest_test(
+    test_room315_grouped_visual_splits
+    test/test_room315_grouped_visual_splits.py
+    TIMEOUT 420
+  )
+  ament_add_pytest_test(
+    test_room315_kairos_visual_training_package
+    test/test_room315_kairos_visual_training_package.py
+    TIMEOUT 180
+  )
+  ament_add_pytest_test(
+    test_room315_eight_shuttle_visual_pipeline
+    test/test_room315_eight_shuttle_visual_pipeline.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_manual_review
+    test/test_room315_visual_manual_review.py
+  )
+  ament_add_pytest_test(
+    test_room315_full_package_static
+    test/test_room315_full_package_static.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_label_exporter
+    test/test_room315_visual_label_exporter.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_scenario_generator
+    test/test_room315_visual_scenario_generator.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_dataset_audit
+    test/test_room315_visual_dataset_audit.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_error_analysis
+    test/test_room315_visual_error_analysis.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_state_capture
+    test/test_room315_visual_state_capture.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_runtime
+    test/test_room315_visual_runtime.py
+    TIMEOUT 180
+  )
+  ament_add_pytest_test(
+    test_room315_visual_runtime_ros_integration
+    test/test_room315_visual_runtime_ros_integration.py
+    TIMEOUT 30
+  )
+  ament_add_pytest_test(
+    test_room315_visual_runtime_v4
+    test/test_room315_visual_runtime_v4.py
+    TIMEOUT 180
+  )
+  if(ROOM315_TORCH_TESTS_AVAILABLE EQUAL 0)
+    ament_add_pytest_test(
+      test_room315_runtime_candidate_v4
+      test/test_room315_runtime_candidate_v4.py
+      TIMEOUT 180
+    )
+  endif()
+  ament_add_pytest_test(
+    test_room315_runtime_acceptance_campaign_v4
+    test/test_room315_runtime_acceptance_campaign_v4.py
+  )
+  ament_add_pytest_test(
+    test_room315_promote_runtime_v4
+    test/test_room315_promote_runtime_v4.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_shadow_compare
+    test/test_room315_visual_shadow_compare.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_contract_v4
+    test/test_room315_visual_contract_v4.py
+  )
+  if(ROOM315_TORCH_TESTS_AVAILABLE EQUAL 0)
+    ament_add_pytest_test(
+      test_room315_visual_model_v4
+      test/test_room315_visual_model_v4.py
+    )
+    ament_add_pytest_test(
+      test_room315_visual_training_v4
+      test/test_room315_visual_training_v4.py
+    )
+    ament_add_pytest_test(
+      test_room315_visual_calibration_v4
+      test/test_room315_visual_calibration_v4.py
+    )
+    ament_add_pytest_test(
+      test_room315_visual_runtime_v4_fault_injection
+      test/test_room315_visual_runtime_v4_fault_injection.py
+      TIMEOUT 180
+    )
+  endif()
+  ament_add_pytest_test(
+    test_room315_visual_acceptance_v4
+    test/test_room315_visual_acceptance_v4.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_state_train_v4
+    test/test_room315_visual_state_train_v4.py
+    TIMEOUT 180
+  )
+  ament_add_pytest_test(
+    test_room315_visual_final_test_v4
+    test/test_room315_visual_final_test_v4.py
+    TIMEOUT 180
+  )
+  ament_add_pytest_test(
+    test_room315_visual_v4_final_test
+    test/test_room315_visual_v4_final_test.py
+    TIMEOUT 180
+  )
+  ament_add_pytest_test(
+    test_room315_visual_scenario_runner
+    test/test_room315_visual_scenario_runner.py
+  )
+  ament_add_pytest_test(
+    test_room315_visual_debug_colors
+    test/test_room315_visual_debug_colors.py
+  )
+endif()
+
+ament_package()

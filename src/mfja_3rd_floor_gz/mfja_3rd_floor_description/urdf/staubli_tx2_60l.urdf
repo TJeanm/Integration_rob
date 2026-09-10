@@ -1,0 +1,235 @@
+<?xml version="1.0"?>
+<robot name="staubli_tx2_60l">
+  <material name="staubli_yellow">
+    <color rgba="0.97 0.74 0.17 1.0"/>
+  </material>
+  <material name="staubli_grey">
+    <color rgba="0.50 0.50 0.50 1.0"/>
+  </material>
+  <material name="schunk_dark">
+    <color rgba="0.22 0.23 0.23 1.0"/>
+  </material>
+
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <mesh filename="package://mfja_3rd_floor_description/models/staubli_tx2_60l/meshes/tx2_60/visual/base_link.stl"/>
+      </geometry>
+      <material name="staubli_yellow"/>
+    </visual>
+  </link>
+
+  <link name="link_1">
+    <visual>
+      <geometry>
+        <mesh filename="package://mfja_3rd_floor_description/models/staubli_tx2_60l/meshes/tx2_60/visual/link_1.stl"/>
+      </geometry>
+      <material name="staubli_yellow"/>
+    </visual>
+  </link>
+
+  <link name="link_2">
+    <visual>
+      <geometry>
+        <mesh filename="package://mfja_3rd_floor_description/models/staubli_tx2_60l/meshes/tx2_60l/visual/link_2.stl"/>
+      </geometry>
+      <material name="staubli_yellow"/>
+    </visual>
+  </link>
+
+  <link name="link_3">
+    <visual>
+      <geometry>
+        <mesh filename="package://mfja_3rd_floor_description/models/staubli_tx2_60l/meshes/tx2_60/visual/link_3.stl"/>
+      </geometry>
+      <material name="staubli_yellow"/>
+    </visual>
+  </link>
+
+  <link name="link_4">
+    <visual>
+      <geometry>
+        <mesh filename="package://mfja_3rd_floor_description/models/staubli_tx2_60l/meshes/tx2_60l/visual/link_4.stl"/>
+      </geometry>
+      <material name="staubli_yellow"/>
+    </visual>
+  </link>
+
+  <link name="link_5">
+    <visual>
+      <geometry>
+        <mesh filename="package://mfja_3rd_floor_description/models/staubli_tx2_60l/meshes/tx60/visual/link_5.stl"/>
+      </geometry>
+      <material name="staubli_grey"/>
+    </visual>
+  </link>
+
+  <link name="link_6">
+    <visual>
+      <geometry>
+        <mesh filename="package://mfja_3rd_floor_description/models/staubli_tx2_60l/meshes/tx60/visual/link_6.stl"/>
+      </geometry>
+      <material name="staubli_grey"/>
+    </visual>
+  </link>
+
+  <link name="flange"/>
+  <link name="base"/>
+  <link name="tool0"/>
+
+  <link name="gripper">
+    <visual>
+      <origin xyz="0 0 -0.01115" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.0375" length="0.0225"/>
+      </geometry>
+      <material name="schunk_dark"/>
+    </visual>
+    <visual>
+      <origin xyz="0 0 0.0074" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.050 0.025 0.0148"/>
+      </geometry>
+      <material name="schunk_dark"/>
+    </visual>
+  </link>
+  <link name="gripper_left_jaw">
+    <inertial>
+      <origin xyz="-0.0125 0 0.0447" rpy="0 0 0"/>
+      <mass value="0.04"/>
+      <inertia ixx="0.00000567" ixy="0" ixz="0" iyy="0.00000667" iyz="0" izz="0.00000167"/>
+    </inertial>
+    <visual>
+      <origin xyz="-0.0116 0 0.01975" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0218 0.011 0.0099"/>
+      </geometry>
+      <material name="schunk_dark"/>
+    </visual>
+    <visual>
+      <origin xyz="-0.0125 0 0.0447" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.020 0.010 0.040"/>
+      </geometry>
+      <material name="schunk_dark"/>
+    </visual>
+  </link>
+  <link name="gripper_right_jaw">
+    <inertial>
+      <origin xyz="0.0125 0 0.0447" rpy="0 0 0"/>
+      <mass value="0.04"/>
+      <inertia ixx="0.00000567" ixy="0" ixz="0" iyy="0.00000667" iyz="0" izz="0.00000167"/>
+    </inertial>
+    <visual>
+      <origin xyz="0.0116 0 0.01975" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0218 0.011 0.0099"/>
+      </geometry>
+      <material name="schunk_dark"/>
+    </visual>
+    <visual>
+      <origin xyz="0.0125 0 0.0447" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.020 0.010 0.040"/>
+      </geometry>
+      <material name="schunk_dark"/>
+    </visual>
+  </link>
+  <link name="gripper_tcp"/>
+
+  <joint name="joint_1" type="revolute">
+    <origin xyz="0 0 0.375" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="link_1"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14159265359" upper="3.14159265359" effort="126.0" velocity="7.59218224618"/>
+  </joint>
+
+  <joint name="joint_2" type="revolute">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="link_1"/>
+    <child link="link_2"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-2.22529479629" upper="2.22529479629" effort="47.0" velocity="6.71951762018"/>
+  </joint>
+
+  <joint name="joint_3" type="revolute">
+    <origin xyz="0 0.02 0.40" rpy="0 0 0"/>
+    <parent link="link_2"/>
+    <child link="link_3"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-2.66162710929" upper="2.66162710929" effort="32.0" velocity="8.72664625997"/>
+  </joint>
+
+  <joint name="joint_4" type="revolute">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="link_3"/>
+    <child link="link_4"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-4.71238898038" upper="4.71238898038" effort="7.0" velocity="17.3664683405"/>
+  </joint>
+
+  <joint name="joint_5" type="revolute">
+    <origin xyz="0 0 0.45" rpy="0 0 0"/>
+    <parent link="link_4"/>
+    <child link="link_5"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-2.11184839491" upper="2.31256125889" effort="8.0" velocity="18.5875365032"/>
+  </joint>
+
+  <joint name="joint_6" type="revolute">
+    <origin xyz="0 0 0.07" rpy="0 0 0"/>
+    <parent link="link_5"/>
+    <child link="link_6"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-4.71238898038" upper="4.71238898038" effort="2.0" velocity="25.2201963626"/>
+  </joint>
+
+  <joint name="joint_6_flange" type="fixed">
+    <origin xyz="0 0 0" rpy="0 -1.57079632679 0"/>
+    <parent link="link_6"/>
+    <child link="flange"/>
+  </joint>
+
+  <joint name="base_link_base" type="fixed">
+    <origin xyz="0 0 0.375" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="base"/>
+  </joint>
+
+  <joint name="flange_tool0" type="fixed">
+    <origin xyz="0 0 0" rpy="0 1.57079632679 0"/>
+    <parent link="flange"/>
+    <child link="tool0"/>
+  </joint>
+
+  <joint name="tool0_gripper" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="tool0"/>
+    <child link="gripper"/>
+  </joint>
+
+  <joint name="gripper_left_jaw_joint" type="prismatic">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="gripper"/>
+    <child link="gripper_left_jaw"/>
+    <axis xyz="-1 0 0"/>
+    <limit lower="0" upper="0.0025" effort="100" velocity="0.17"/>
+    <dynamics damping="0.2" friction="0.0"/>
+  </joint>
+
+  <joint name="gripper_right_jaw_joint" type="prismatic">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="gripper"/>
+    <child link="gripper_right_jaw"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="0" upper="0.0025" effort="100" velocity="0.17"/>
+    <dynamics damping="0.2" friction="0.0"/>
+  </joint>
+
+  <joint name="gripper_tcp_joint" type="fixed">
+    <origin xyz="0 0 0.0647" rpy="0 0 0"/>
+    <parent link="gripper"/>
+    <child link="gripper_tcp"/>
+  </joint>
+</robot>

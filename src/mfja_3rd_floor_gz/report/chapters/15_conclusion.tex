@@ -1,0 +1,39 @@
+\chapter{Conclusion}
+\label{chap:conclusion}
+
+MFJA needed a reproducible environment that could connect its heterogeneous
+third-floor robots to checked task execution.
+
+In Phase~1, I designed the third-floor CAD and the furnishings of Rooms~314 and
+315 in Autodesk Inventor. I then integrated the supplied rail cells and
+attributed robot assets into Gazebo. In Phase~2, I implemented multi-shuttle
+transport, versioned interfaces, visual and language grounding, symbolic
+planning and a supervisor that verifies effects before reporting success.
+Together, these elements form one chain from task-level English to verified
+simulated effects, rather than separate demonstrations. Configuration,
+automated tests, retained evidence and run instructions form the handover to
+MFJA.
+
+The declared evaluation succeeded in all 10 language cases and all 12 isolated
+request-to-motion runs. It also succeeded in all 5 closed-loop fault cases. The
+one-shot Final Test evaluated 4,680 targets and passed all 80 predeclared gates.
+Segment classification was 99.9359\%; the stricter joint segment/position result
+was 90.8974\% at $|\Delta s_{ratio}|\leq0.05$. The discrete facts supplied to
+planning were therefore strong, but fine position along a rail remained the
+clearest measured weakness. The retained evidence supports O1--O4 within the
+stated scope. \Cref{tab:objective-results} maps each objective to its principal
+evidence.
+
+These claims apply to fixed simulated cameras, known shuttles, kinematic rail
+motion and mostly one execution per scene. They do not establish physical
+transfer, simultaneous six-robot motion, repeated-run reliability or certified
+safety. The selected runtime is Gazebo-only and starts with command execution
+disabled. The priority extensions are a genuinely shifted visual set, repeated
+seeded campaigns, live-fault recovery and stronger concurrency tests.
+
+For MFJA, the outcome is a reusable platform for teaching, integration and
+controlled planning or perception comparisons. Working under platform
+constraints required me to turn a broad request into testable contracts and
+revise designs when weaknesses appeared. The main professional lesson for me
+was learning to justify design choices with evidence, discuss them with my
+supervisors and state clearly what the results do and do not demonstrate.
