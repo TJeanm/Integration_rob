@@ -1,8 +1,8 @@
+import sys
 import time
 import rclpy
 
 from threading import Thread
-
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
@@ -22,33 +22,34 @@ JOINT_NAMES = [
 
 
 def main():
+    if len(sys.argv) != 7:
+        print()
+        print("Usage:")
+        print("  joint_goal j1 j2 j3 j4 j5 j6")
+        print()
+        print("Example:")
+        print("  joint_goal 0.3 -0.25 0.2 0.0 0.15 0.0")
+        print()
+        sys.exit(1)
+
+    try:
+        joint_target = [float(value) for value in sys.argv[1:7]]
+    except ValueError:
+        print("ERROR: all joint coordinates must be numbers.")
+        sys.exit(1)
+
     rclpy.init()
 
     node = Node(
         "hc10_pymoveit2_api",
         parameter_overrides=[
-            Parameter("use_sim_time", Parameter.Type.BOOL, True),
+            Parameter(
+                "use_sim_time",
+                Parameter.Type.BOOL,
+                True,
+            )
         ],
-        automatically_declare_parameters_from_overrides=True,
     )
-
-    node.declare_parameter("mode", "joint")
-
-    node.declare_parameter("j1", 0.30)
-    node.declare_parameter("j2", -0.25)
-    node.declare_parameter("j3", 0.20)
-    node.declare_parameter("j4", 0.00)
-    node.declare_parameter("j5", 0.15)
-    node.declare_parameter("j6", 0.00)
-
-    node.declare_parameter("x", 0.5)
-    node.declare_parameter("y", 0.0)
-    node.declare_parameter("z", 0.6)
-
-    node.declare_parameter("qx", 0.0)
-    node.declare_parameter("qy", 0.0)
-    node.declare_parameter("qz", 0.0)
-    node.declare_parameter("qw", 1.0)
 
     callback_group = ReentrantCallbackGroup()
 
@@ -65,64 +66,29 @@ def main():
     executor = MultiThreadedExecutor(num_threads=2)
     executor.add_node(node)
 
-    executor_thread = Thread(target=executor.spin, daemon=True)
+    executor_thread = Thread(
+        target=executor.spin,
+        daemon=True,
+    )
     executor_thread.start()
 
-    node.get_logger().info("Waiting for MoveIt action server...")
+    node.get_logger().info("Waiting for MoveIt...")
     time.sleep(3.0)
 
-    mode = node.get_parameter("mode").value
+    node.get_logger().info(
+        "Joint goal:"
+        f" j1={joint_target[0]:.3f}"
+        f" j2={joint_target[1]:.3f}"
+        f" j3={joint_target[2]:.3f}"
+        f" j4={joint_target[3]:.3f}"
+        f" j5={joint_target[4]:.3f}"
+        f" j6={joint_target[5]:.3f}"
+    )
 
-    if mode == "joint":
-        joint_target = [
-            node.get_parameter("j1").value,
-            node.get_parameter("j2").value,
-            node.get_parameter("j3").value,
-            node.get_parameter("j4").value,
-            node.get_parameter("j5").value,
-            node.get_parameter("j6").value,
-        ]
-
-        node.get_logger().info(
-            f"Joint target: {joint_target}"
-        )
-
-        moveit2.move_to_configuration(
-            joint_positions=joint_target,
-            joint_names=JOINT_NAMES,
-        )
-
-    elif mode == "pose":
-        position = [
-            node.get_parameter("x").value,
-            node.get_parameter("y").value,
-            node.get_parameter("z").value,
-        ]
-
-        quaternion = [
-            node.get_parameter("qx").value,
-            node.get_parameter("qy").value,
-            node.get_parameter("qz").value,
-            node.get_parameter("qw").value,
-        ]
-
-        node.get_logger().info(
-            f"Pose target: position={position}, quaternion={quaternion}"
-        )
-
-        moveit2.move_to_pose(
-            position=position,
-            quat_xyzw=quaternion,
-            target_link="tool0",
-            frame_id="base_link",
-        )
-
-    else:
-        node.get_logger().error(
-            "Invalid mode. Use mode:=joint or mode:=pose"
-        )
-        rclpy.shutdown()
-        return
+    moveit2.move_to_configuration(
+        joint_positions=joint_target,
+        joint_names=JOINT_NAMES,
+    )
 
     success = moveit2.wait_until_executed()
 
