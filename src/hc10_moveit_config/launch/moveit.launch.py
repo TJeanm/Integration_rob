@@ -28,7 +28,11 @@ def generate_launch_description():
             'point_cloud_topic': '/hc10/collision_cloud',
             'max_range': 5.0,
             'point_subsample': 2,
-            'padding_offset': 0.01,
+            # Gazebo and MoveIt meshes differ by a few centimetres around the
+            # simulated jaws. A wider self-filter removes those robot returns
+            # before OctoMap insertion, preventing false start collisions on
+            # repeated cycles while preserving the surrounding geometry.
+            'padding_offset': 0.05,
             'padding_scale': 1.0,
             'max_update_rate': 1.0,
             'filtered_cloud_topic': '/room_315/perception/collision_points',

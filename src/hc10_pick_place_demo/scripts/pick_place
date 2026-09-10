@@ -14,7 +14,13 @@ from moveit_msgs.msg import (
     PositionConstraint,
     RobotTrajectory,
 )
-from moveit_msgs.srv import GetCartesianPath, GetMotionPlan, GetPositionFK, GetPositionIK
+from moveit_msgs.srv import (
+    GetCartesianPath,
+    GetMotionPlan,
+    GetPositionFK,
+    GetPositionIK,
+    GetStateValidity,
+)
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from moveit_msgs.action import ExecuteTrajectory
@@ -47,6 +53,7 @@ class Demo(Node):
         self.execution = ActionClient(self, ExecuteTrajectory, '/execute_trajectory')
         self.scene = self.create_client(GetPlanningScene, '/get_planning_scene')
         self.clear_octomap_client = self.create_client(Empty, '/clear_octomap')
+        self.validity_client = self.create_client(GetStateValidity, '/check_state_validity')
         self.arm = self.create_publisher(
             JointTrajectory, '/yaskawa_hc10_1/joint_trajectory', 1
         )
@@ -74,38 +81,67 @@ class Demo(Node):
                 self.plan_client.service_is_ready(),
                 self.cartesian_client.service_is_ready(),
                 self.clear_octomap_client.service_is_ready(),
+                self.validity_client.service_is_ready(),
             )
             if all(status):
                 return
         raise RuntimeError(
             'Dépendances indisponibles '
-            '[joints, contrôleur, IK, FK, OMPL, cartésien, clear_octomap] '
+            '[joints, contrôleur, IK, FK, OMPL, cartésien, clear_octomap, validité] '
             f'= {status}'
         )
 
     def rebuild_octomap(self):
         """Discard voxels left by the previous cycle and wait for fresh RGB-D data."""
-        future = self.clear_octomap_client.call_async(Empty.Request())
+        for attempt in range(1, 4):
+            future = self.clear_octomap_client.call_async(Empty.Request())
+            rclpy.spin_until_future_complete(self, future, timeout_sec=5)
+            if not future.done() or future.result() is None:
+                raise RuntimeError("Impossible de vider l'OctoMap avant le cycle")
+            print(
+                f"Ancienne OctoMap vidée; reconstruction caméra "
+                f"(essai {attempt}/3)...",
+                flush=True,
+            )
+            deadline = time.monotonic() + 5.0
+            while time.monotonic() < deadline:
+                rclpy.spin_once(self, timeout_sec=0.1)
+                request = GetPlanningScene.Request()
+                request.components.components = PlanningSceneComponents.OCTOMAP
+                scene_future = self.scene.call_async(request)
+                rclpy.spin_until_future_complete(self, scene_future, timeout_sec=1)
+                response = scene_future.result() if scene_future.done() else None
+                if response is None or not response.scene.world.octomap.octomap.data:
+                    continue
+                if self.current_state_valid():
+                    print(
+                        f"OctoMap reconstruite et état initial valide: "
+                        f"{len(response.scene.world.octomap.octomap.data)} octets",
+                        flush=True,
+                    )
+                    return
+                print("État initial occupé par l'OctoMap; nouvelle reconstruction", flush=True)
+                break
+        raise RuntimeError(
+            "L'OctoMap place encore le robot initial en collision après 3 essais"
+        )
+
+    def current_state_valid(self):
+        request = GetStateValidity.Request()
+        request.group_name = 'manipulator'
+        request.robot_state.joint_state = self.states[-1]
+        future = self.validity_client.call_async(request)
         rclpy.spin_until_future_complete(self, future, timeout_sec=5)
-        if not future.done() or future.result() is None:
-            raise RuntimeError("Impossible de vider l'OctoMap avant le cycle")
-        print("Ancienne OctoMap vidée; reconstruction depuis la caméra...", flush=True)
-        deadline = time.monotonic() + 5.0
-        while time.monotonic() < deadline:
-            rclpy.spin_once(self, timeout_sec=0.1)
-            request = GetPlanningScene.Request()
-            request.components.components = PlanningSceneComponents.OCTOMAP
-            scene_future = self.scene.call_async(request)
-            rclpy.spin_until_future_complete(self, scene_future, timeout_sec=1)
-            response = scene_future.result() if scene_future.done() else None
-            if response is not None and response.scene.world.octomap.octomap.data:
-                print(
-                    f"OctoMap reconstruite: "
-                    f"{len(response.scene.world.octomap.octomap.data)} octets",
-                    flush=True,
-                )
-                return
-        raise RuntimeError("OctoMap non reconstruite après vidage : vérifier perception.sh")
+        response = future.result() if future.done() else None
+        if response is None:
+            raise RuntimeError("Service de validité MoveIt sans réponse")
+        if not response.valid:
+            contacts = [
+                f'{contact.contact_body_1} / {contact.contact_body_2}'
+                for contact in response.contacts
+            ]
+            print(f'État initial MoveIt invalide: {contacts}', flush=True)
+        return response.valid
 
     def start_positions(self):
         if self.planning_positions is not None:
