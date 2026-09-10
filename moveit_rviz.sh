@@ -6,17 +6,25 @@ cd "$INTEGRATION_ROB_ROOT"
 
 # A stale move_group makes /compute_ik nondeterministic because two servers
 # answer the same request. Always start a single MoveIt instance.
-pkill -TERM -f '/moveit_ros_move_group/move_group' 2>/dev/null || true
-pkill -TERM -f 'ros2 launch .*moveit.*[.]launch[.]py' 2>/dev/null || true
-pkill -TERM -f 'hc10_mfja_control_adapter' 2>/dev/null || true
-pkill -TERM -f 'rviz2.*hc10_moveit_rviz' 2>/dev/null || true
-sleep 1
-pkill -KILL -f '/moveit_ros_move_group/move_group' 2>/dev/null || true
-pkill -KILL -f 'ros2 launch .*moveit.*[.]launch[.]py' 2>/dev/null || true
-pkill -KILL -f 'hc10_mfja_control_adapter' 2>/dev/null || true
-pkill -KILL -f 'rviz2.*hc10_moveit_rviz' 2>/dev/null || true
+stale_patterns=(
+  '/moveit_ros_move_group/move_group'
+  'ros2 launch .*moveit.*[.]launch[.]py'
+  'hc10_mfja_control_adapter'
+  'rviz2.*hc10_moveit_rviz'
+)
+for signal in TERM KILL; do
+  for pattern in "${stale_patterns[@]}"; do
+    pkill "-${signal}" -f "$pattern" 2>/dev/null || true
+  done
+  if [[ "$signal" == TERM ]]; then
+    sleep 1
+  fi
+done
 
-ros2 run hc10_mfja_control_adapter hc10_control_adapter &
+# use_sim_time doit valoir true comme dans bringup.launch.py: sans cela
+# l'adaptateur et MoveIt ne partagent pas la même horloge.
+ros2 run hc10_mfja_control_adapter hc10_control_adapter \
+  --ros-args -p use_sim_time:=true &
 adapter_pid=$!
 trap 'kill -INT "$adapter_pid" 2>/dev/null || true' EXIT INT TERM
 ros2 launch hc10_moveit_config moveit.launch.py

@@ -12,8 +12,9 @@ fi
 source "$ros_setup"
 
 # The Room 315 packages live in an external workspace. Users may provide its
-# install directory explicitly. Otherwise, accept an already sourced package
-# or common workspaces located next to this repository.
+# install directory explicitly. Otherwise, accept an already sourced package,
+# the underlay compiled par auto_start.sh, ou les workspaces habituels situés
+# à côté de ce dépôt.
 if [[ -n "${MFJA_UNDERLAY:-}" ]]; then
   if [[ ! -f "$MFJA_UNDERLAY/setup.bash" ]]; then
     echo "MFJA_UNDERLAY invalide: $MFJA_UNDERLAY/setup.bash absent" >&2
@@ -22,12 +23,14 @@ if [[ -n "${MFJA_UNDERLAY:-}" ]]; then
   source "$MFJA_UNDERLAY/setup.bash"
 elif ! ros2 pkg prefix mfja_3rd_floor_bringup >/dev/null 2>&1; then
   for candidate in \
+    "${XDG_CACHE_HOME:-$HOME/.cache}/integration_rob/mfja_underlay/install" \
     "$repo_dir/../hc10_ros2_ws/install" \
     "$repo_dir/../mfja_3rd_floor_gz/install"
   do
     if [[ -f "$candidate/setup.bash" ]]; then
       source "$candidate/setup.bash"
       if ros2 pkg prefix mfja_3rd_floor_bringup >/dev/null 2>&1; then
+        export MFJA_UNDERLAY="$candidate"
         break
       fi
     fi
@@ -35,7 +38,9 @@ elif ! ros2 pkg prefix mfja_3rd_floor_bringup >/dev/null 2>&1; then
 fi
 
 if [[ ! -f "$repo_dir/install/setup.bash" ]]; then
-  echo "Workspace non compilé. Exécuter: colcon build --symlink-install" >&2
+  echo "Workspace non compilé. Exécuter depuis $repo_dir:" >&2
+  echo "  ./auto_start.sh          # installation et compilation automatiques" >&2
+  echo "  colcon build --symlink-install   # compilation seule" >&2
   return 1
 fi
 source "$repo_dir/install/setup.bash"

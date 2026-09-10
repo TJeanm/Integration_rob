@@ -3,3 +3,10 @@ install/
 log/
 **/__pycache__/
 *.pyc
+.auto_start_logs/
+# Checkouts externes éventuellement déposés dans le workspace. Room 315 est
+# toujours consommé comme underlay: ces dossiers ne doivent pas être versionnés
+# (ils étaient déclarés comme sous-modules sans .gitmodules, donc inutilisables
+# après un clone).
+/src/mfja_3rd_floor_gz/
+/src/motoman_ros2_support_packages/

@@ -57,13 +57,18 @@ Le dépôt s'appuie sur les paquets du projet externe
 notamment `mfja_3rd_floor_bringup`, `mfja_robot_control_config` et
 `mfja_3rd_floor_description`.
 
-Ils doivent être compilés dans un workspace ROS 2 avant ce projet. Le dossier
-`install` de ce workspace sera appelé **underlay MFJA** dans la suite.
+Ils doivent être compilés dans un workspace ROS 2 **séparé** de celui-ci. Le
+dossier `install` de ce workspace sera appelé **underlay MFJA** dans la suite.
 
-Les scripts le détectent automatiquement s'il se trouve à côté de ce dépôt
-sous l'un de ces chemins :
+Room 315 n'est jamais compilé dans le workspace de ce dépôt : `colcon build` y
+ignore les paquets `mfja_*` et `motoman_*`, afin que toutes les machines suivent
+exactement le même chemin d'installation. Un éventuel clone déposé dans
+`src/mfja_3rd_floor_gz` sert uniquement de source pour construire l'underlay.
+
+Les scripts détectent l'underlay automatiquement sous l'un de ces chemins :
 
 ```text
+~/.cache/integration_rob/mfja_underlay/install   (créé par auto_start.sh)
 ../hc10_ros2_ws/install
 ../mfja_3rd_floor_gz/install
 ```
@@ -88,23 +93,36 @@ Installer les dépendances principales :
 ```bash
 sudo apt update
 sudo apt install -y \
+  git \
+  python3-colcon-common-extensions \
+  python3-rosdep \
+  python3-numpy \
   ros-jazzy-moveit \
   ros-jazzy-ros-gz \
   ros-jazzy-ros-gz-sim \
   ros-jazzy-ros-gz-bridge \
+  ros-jazzy-sensor-msgs-py \
+  ros-jazzy-tf2-ros \
   ros-jazzy-xacro \
   ros-jazzy-robot-state-publisher \
   ros-jazzy-joint-state-publisher \
-  ros-jazzy-rviz2 \
-  python3-rosdep
+  ros-jazzy-rviz2
 ```
 
-Initialiser `rosdep` une seule fois sur la machine si nécessaire :
+`python3-colcon-common-extensions`, `python3-numpy` et
+`ros-jazzy-sensor-msgs-py` sont indispensables : sans le premier aucun script ne
+compile, les deux autres sont importés par le nœud de perception.
+
+Initialiser `rosdep` une seule fois sur la machine :
 
 ```bash
 sudo rosdep init
 rosdep update
 ```
+
+`auto_start.sh` s'arrête avec la marche à suivre si `rosdep` n'est pas
+initialisé. Pour passer outre lorsque toutes les dépendances sont déjà
+installées : `AUTO_SKIP_ROSDEP=1 ./auto_start.sh`.
 
 Cloner la branche de travail :
 
@@ -113,6 +131,9 @@ git clone --branch integration-avancement \
   https://github.com/TJeanm/Integration_rob.git
 cd Integration_rob
 ```
+
+Ce dépôt ne contient aucun sous-module : un clone simple suffit et donne un
+workspace complet.
 
 Installer les dépendances ROS du dépôt et compiler :
 
@@ -139,12 +160,26 @@ La méthode la plus simple consiste à exécuter :
 Ce script recherche automatiquement ROS 2 et les paquets Room 315 dans le
 dossier personnel. Il utilise un underlay déjà compilé lorsqu'il en trouve un.
 Sinon, il recherche les sources MFJA, les compile automatiquement ou les clone
-depuis GitHub si elles sont absentes. Il compile ensuite ce dépôt et ouvre les
-quatre terminaux dans le bon ordre.
+depuis GitHub si elles sont absentes, en se plaçant sur le commit validé avec ce
+dépôt. Il installe les dépendances ROS des deux workspaces avec `rosdep`,
+compile ce dépôt, puis ouvre les quatre terminaux dans le bon ordre.
 
-Le script ne passe à l'étape suivante qu'après avoir reçu un vrai message de
-la caméra, un vrai nuage filtré, puis les services MoveIt. Il indique donc
-directement l'étape responsable si le nuage de points est absent.
+Le script ne passe à l'étape suivante qu'après avoir reçu un nuage **contenant
+réellement des points** (un `PointCloud2` vide est un message valide et ne prouve
+rien), puis un nuage filtré, puis les services MoveIt. Le message d'erreur
+distingue « aucun message » de « des messages sans point exploitable », ce qui
+désigne directement l'étape responsable.
+
+Variables utiles :
+
+| Variable | Effet |
+| --- | --- |
+| `MFJA_UNDERLAY` | Chemin explicite de l'underlay Room 315 |
+| `MFJA_COMMIT` | Commit Room 315 à utiliser ; vide = tête de branche |
+| `AUTO_SKIP_ROSDEP=1` | Ne pas installer les dépendances automatiquement |
+| `MIN_CAMERA_POINTS` | Points valides exigés côté caméra (défaut 100) |
+| `CAMERA_TIMEOUT` | Délai d'attente de la caméra en secondes (défaut 120) |
+| `HC10_SPAWN_TIMEOUT` | Délai d'attente du serveur Gazebo (défaut 120) |
 
 Pour uniquement détecter les fichiers, installer les dépendances et compiler :
 
@@ -281,6 +316,35 @@ ros2 topic info /hc10/collision_cloud
 ```
 
 Le nombre de publishers doit être au moins égal à 1.
+
+### `auto_start.sh` reste bloqué sur un nuage de points
+
+`auto_start.sh` écrit un journal par terminal dans `.auto_start_logs/` :
+
+```bash
+tail -n 40 .auto_start_logs/gazebo.log
+tail -n 40 .auto_start_logs/perception.log
+```
+
+Le message du nœud de perception indique la cause :
+
+| Message | Cause |
+| --- | --- |
+| `Aucun message reçu sur /room_315/perception/right_rail_rgbd/points depuis Ns` | Gazebo n'est pas lancé, ou le pont RGB-D est absent |
+| `aucun point fini` | Le capteur RGB-D ne rend rien (pas d'accélération 3D côté serveur Gazebo) |
+| `aucun des N points ne passe le filtre spatial` | La caméra ne voit que le sol : les modèles n'ont pas été créés dans le monde |
+| `ModuleNotFoundError` | `python3-numpy` ou `ros-jazzy-sensor-msgs-py` manquant |
+
+Contrôles directs :
+
+```bash
+source setup_env.sh
+ros2 topic echo /room_315/perception/right_rail_rgbd/points --no-arr --once
+gz service -l | grep create
+```
+
+`width` et `height` doivent être différents de zéro, et le service
+`/world/room_315_only/create` doit apparaître.
 
 ### Gazebo affiche une fenêtre grise
 
