@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Publish the Room 315 RGB-D cloud used by the HC10 collision OctoMap."""
 
+from geometry_msgs.msg import PoseStamped
 import numpy as np
 import rclpy
 from rclpy.executors import ExternalShutdownException
@@ -30,6 +31,7 @@ class Perception(Node):
         self.silent_periods = 0
         self.collision_pub = self.create_publisher(PointCloud2, COLLISION_TOPIC, 1)
         self.camera_pub = self.create_publisher(PointCloud2, CAMERA_TOPIC, 1)
+        self.cube_pub = self.create_publisher(PoseStamped, '/hc10/detected_cube_pose', 1)
         self.subscription = self.create_subscription(
             PointCloud2,
             INPUT_TOPIC,
@@ -64,14 +66,20 @@ class Perception(Node):
             f'ros2 topic hz {INPUT_TOPIC}')
 
     @staticmethod
-    def read_xyz(msg):
-        """Return the finite XYZ points of a cloud, whatever its layout."""
-        cloud = point_cloud2.read_points_numpy(msg, field_names=['x', 'y', 'z'])
-        # Selon la version de sensor_msgs_py, un nuage organisé peut arriver en
-        # (hauteur, largeur, 3) au lieu de (N, 3): on remet à plat dans tous les
-        # cas avant de sous-échantillonner, sinon les coordonnées sont mélangées.
-        cloud = np.asarray(cloud, dtype=np.float32).reshape(-1, 3)[::4]
-        return cloud[np.isfinite(cloud).all(axis=1)]
+    def read_cloud(msg):
+        """Return finite XYZ and optional RGB points of a cloud."""
+        fields = [f.name for f in msg.fields]
+        has_rgb = 'rgb' in fields
+        names = ['x', 'y', 'z', 'rgb'] if has_rgb else ['x', 'y', 'z']
+        cloud = point_cloud2.read_points_numpy(msg, field_names=names)
+        cloud = np.asarray(cloud).reshape(-1, len(names))[::4]
+        xyz = cloud[:, :3].astype(np.float32)
+        valid = np.isfinite(xyz).all(axis=1)
+        xyz = xyz[valid]
+        colors = None
+        if has_rgb:
+            colors = cloud[:, 3][valid].astype(np.float32).view(np.uint32)
+        return xyz, colors
 
     def cloud(self, msg):
         now = self.get_clock().now().nanoseconds
@@ -79,7 +87,7 @@ class Perception(Node):
             return
         self.last_input_ns = now
         try:
-            xyz = self.read_xyz(msg)
+            xyz, colors = self.read_cloud(msg)
         except Exception as error:  # noqa: BLE001 - le nœud doit rester vivant
             self.warn_throttled(f'Nuage caméra illisible ({type(error).__name__}: {error})')
             return
@@ -101,22 +109,56 @@ class Perception(Node):
             # small band below it so the OctoMap protects the robot table.
             & (points[:, 2] > -0.08) & (points[:, 2] < 2.8)
         )
-        points = points[keep]
-        if not len(points):
+        if not np.any(keep):
             self.warn_throttled(
                 f'Nuage reçu mais aucun des {len(xyz)} points ne passe le filtre spatial. '
                 'La caméra ne voit probablement que le sol: vérifier que gazebo.sh a bien '
                 'créé yaskawa_hc10_1, tiago_delivery et la table dans le monde.')
             return
+
+        # Identification du cube rouge sur le plateau TIAGo à quai
+        cube_roi = (
+            (points[:, 0] > -0.20) & (points[:, 0] < 0.20)
+            & (points[:, 1] > -1.25) & (points[:, 1] < -0.85)
+            & (points[:, 2] > 0.22) & (points[:, 2] < 0.38)
+        )
+        if colors is not None:
+            red = (colors >> 16) & 255
+            green = (colors >> 8) & 255
+            blue = colors & 255
+            cube_mask = cube_roi & (red > 120) & (red > green * 1.2) & (red > blue * 1.2)
+        else:
+            cube_mask = cube_roi
+
+        if np.count_nonzero(cube_mask) >= 3:
+            center = np.median(points[cube_mask], axis=0)
+            pose_msg = PoseStamped()
+            pose_msg.header.stamp = msg.header.stamp
+            pose_msg.header.frame_id = 'base_link'
+            pose_msg.pose.position.x = float(center[0])
+            pose_msg.pose.position.y = float(center[1])
+            pose_msg.pose.position.z = float(center[2])
+            pose_msg.pose.orientation.w = 1.0
+            self.cube_pub.publish(pose_msg)
+
         if now - self.last_output_ns < OUTPUT_PERIOD_NS:
             return
         self.last_output_ns = now
         header = msg.header
         header.frame_id = OUTPUT_FRAME
-        output = point_cloud2.create_cloud_xyz32(header, xyz[keep].tolist())
-        self.collision_pub.publish(output)
-        self.camera_pub.publish(output)
-        self.get_logger().info(f'Nuage de collision publié: {len(points)} points')
+
+        # Affichage RViz complet (avec pièce)
+        camera_output = point_cloud2.create_cloud_xyz32(header, xyz[keep].tolist())
+        self.camera_pub.publish(camera_output)
+
+        # La pièce doit rester saisissable : les contacts physiques sont gérés par
+        # Gazebo, tandis que l'OctoMap protège l'environnement fixe autour de la pince.
+        keep_collision = keep & (~cube_mask)
+        collision_output = point_cloud2.create_cloud_xyz32(header, xyz[keep_collision].tolist())
+        self.collision_pub.publish(collision_output)
+        self.get_logger().info(
+            f'Nuage de collision publié: {np.count_nonzero(keep_collision)} points '
+            f'({np.count_nonzero(cube_mask)} points cube filtrés pour la prise)')
 
 
 def main():

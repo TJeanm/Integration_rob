@@ -52,8 +52,16 @@ class TiagoDelivery(Node):
         request.entity.name = name
         request.entity.type = Entity.MODEL
         request.pose.position.x = WORLD_X
-        request.pose.position.y = y + (TRAY_OFFSET_Y if name == 'tiago_delivery_payload' else 0.0)
-        request.pose.position.z = 0.02 if name == 'tiago_delivery' else 0.0
+        if name in ('tiago_delivery_payload', 'red_cube'):
+            request.pose.position.y = y + TRAY_OFFSET_Y
+        else:
+            request.pose.position.y = y
+        if name == 'tiago_delivery':
+            request.pose.position.z = 0.02
+        elif name == 'red_cube':
+            request.pose.position.z = 0.875
+        else:
+            request.pose.position.z = 0.0
         request.pose.orientation.z = YAW_Z
         request.pose.orientation.w = YAW_W
         future = self.pose_client.call_async(request)
@@ -74,6 +82,8 @@ class TiagoDelivery(Node):
                 y = begin + (end - begin) * ratio
                 ok_robot = self.set_pose('tiago_delivery', y)
                 ok_payload = self.set_pose('tiago_delivery_payload', y)
+                if arriving:
+                    self.set_pose('red_cube', y)
                 if not (ok_robot and ok_payload):
                     self.get_logger().error('Déplacement TIAGo refusé par Gazebo')
                     return
@@ -89,6 +99,7 @@ class TiagoDelivery(Node):
         # Après un premier cycle le TIAGo est revenu au point de départ. Un
         # nouvel appel par demo.sh relance donc automatiquement une livraison.
         if not self.arrived and not self.moving:
+            self.set_pose('red_cube', START_Y)
             self.launch_move(START_Y, DOCK_Y, True)
         response.success = self.arrived and not self.moving
         response.message = 'TIAGo à quai' if response.success else 'TIAGo en approche'
