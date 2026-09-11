@@ -72,13 +72,6 @@ ros2 run ros_gz_bridge parameter_bridge \
 camera_bridge_pid=$!
 
 gui_pid=
-if (( software_camera )); then
-  gui_config=$(ros2 pkg prefix --share mfja_robot_control_config)/config/room315_runtime_safe.gui.config
-  env -u LIBGL_ALWAYS_SOFTWARE gz sim -g --gui-config "$gui_config" &
-  gui_pid=$!
-  echo "GUI Gazebo séparée du rendu logiciel de la caméra."
-fi
-
 cleanup() {
   kill -INT "$sim_pid" "$camera_bridge_pid" ${gui_pid:+"$gui_pid"} 2>/dev/null || true
 }
@@ -134,5 +127,15 @@ if [[ "${HC10_TEST_OBSTACLE:-1}" == "1" ]]; then
   spawn_model trajectory_test_obstacle "$share/models/trajectory_test_obstacle.sdf" \
     'position: {x: -14.6569, y: -3.5590, z: 0.62}'
   echo "Obstacle de test A-B activé (HC10_TEST_OBSTACLE=0 pour le retirer)."
+fi
+
+# Sur VMware, ouvrir la GUI avant que le serveur ait chargé la scène produit
+# parfois une fenêtre uniformément grise. Attendre ici garantit que le monde,
+# le robot, la plateforme et l'obstacle existent avant la première image.
+if (( software_camera )); then
+  gui_config=$(ros2 pkg prefix --share mfja_robot_control_config)/config/room315_runtime_safe.gui.config
+  env -u LIBGL_ALWAYS_SOFTWARE gz sim -g --gui-config "$gui_config" &
+  gui_pid=$!
+  echo "GUI Gazebo ouverte après chargement complet de la scène."
 fi
 wait "$sim_pid"
