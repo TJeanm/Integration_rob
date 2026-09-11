@@ -164,6 +164,39 @@ build_underlay() {
     --symlink-install
 }
 
+optimize_cached_rgbd() {
+  local source_model="$cache_root/sources/mfja_3rd_floor_gz/mfja_3rd_floor_description/models/room315_visual_observation_rig/model.sdf"
+  local installed_model="$cache_root/mfja_underlay/install/mfja_3rd_floor_description/share/mfja_3rd_floor_description/models/room315_visual_observation_rig/model.sdf"
+  [[ -f "$source_model" ]] || return 0
+  python3 - "$source_model" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+path = sys.argv[1]
+tree = ET.parse(path)
+root = tree.getroot()
+for sensor in root.findall('.//sensor'):
+    image = sensor.find('./camera/image')
+    if sensor.get('name') == 'room315_right_rail_rgbd':
+        sensor.find('always_on').text = 'true'
+        sensor.find('update_rate').text = '2'
+        image.find('width').text = '320'
+        image.find('height').text = '240'
+    elif sensor.get('name') == 'room315_left_rail_rgbd':
+        sensor.find('always_on').text = 'false'
+        sensor.find('update_rate').text = '1'
+        image.find('width').text = '160'
+        image.find('height').text = '120'
+tree.write(path, encoding='unicode', xml_declaration=True)
+PY
+  # Avec --symlink-install, le fichier installé pointe normalement vers la
+  # source. Couvrir aussi une installation copiée.
+  if [[ -f "$installed_model" ]] && [[ ! "$installed_model" -ef "$source_model" ]]; then
+    cp "$source_model" "$installed_model"
+  fi
+  echo "Profil RGB-D léger appliqué à l'underlay automatique."
+}
+
 ensure_rosdep
 
 underlay=$(find_underlay || true)
@@ -181,6 +214,10 @@ if [[ -z "$underlay" ]]; then
   fi
   build_underlay "$source_root"
   underlay="$cache_root/mfja_underlay/install"
+fi
+
+if [[ "$underlay" == "$cache_root/mfja_underlay/install" ]]; then
+  optimize_cached_rgbd
 fi
 
 echo "Underlay Room 315: $underlay"
