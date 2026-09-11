@@ -241,7 +241,7 @@ import time
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
 
@@ -270,7 +270,14 @@ def callback(message):
 rclpy.init()
 node = Node('integration_auto_wait')
 subscription = node.create_subscription(
-    PointCloud2, topic, callback, qos_profile_sensor_data)
+    PointCloud2,
+    topic,
+    callback,
+    QoSProfile(
+        history=HistoryPolicy.KEEP_LAST,
+        depth=1,
+        reliability=ReliabilityPolicy.RELIABLE,
+    ))
 deadline = time.monotonic() + float(timeout_text)
 while not state['ok'] and time.monotonic() < deadline:
     rclpy.spin_once(node, timeout_sec=0.2)
