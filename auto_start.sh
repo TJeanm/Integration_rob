@@ -245,6 +245,19 @@ fi
 
 mkdir -p "$log_dir"
 
+echo "Nettoyage des anciennes instances..."
+"$repo_dir/stop_all.sh"
+
+cleanup_after_failure() {
+  local status=$?
+  if (( status != 0 )); then
+    echo "Échec du lancement: arrêt des composants déjà ouverts." >&2
+    "$repo_dir/stop_all.sh" >/dev/null 2>&1 || true
+  fi
+  exit "$status"
+}
+trap cleanup_after_failure EXIT
+
 # --------------------------------------------------------------------------
 # Lancement des quatre terminaux
 # --------------------------------------------------------------------------
@@ -396,3 +409,5 @@ else
   echo "Gazebo, perception et MoveIt/RViz sont prêts."
   echo "Lancer ./demo.sh manuellement pour démarrer le mouvement."
 fi
+
+trap - EXIT

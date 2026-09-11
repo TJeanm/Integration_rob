@@ -193,6 +193,12 @@ Pour préparer Gazebo, la perception et RViz sans lancer le mouvement :
 AUTO_RUN_DEMO=0 ./auto_start.sh
 ```
 
+Pour arrêter complètement les quatre composants, y compris après un crash :
+
+```bash
+./stop_all.sh
+```
+
 ### Lancement manuel
 
 Ouvrir quatre terminaux dans le dossier `Integration_rob`. Si
