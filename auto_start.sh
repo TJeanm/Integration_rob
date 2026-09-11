@@ -374,6 +374,62 @@ wait_for_service() {
   fail "service indisponible après ${timeout_seconds}s: $service; journal: $moveit_log"
 }
 
+wait_for_joints() {
+  echo "Attente de l'état complet des six articulations HC10..."
+  python3 - <<'PY'
+import time
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
+from sensor_msgs.msg import JointState
+
+required = {'joint_1_s', 'joint_2_l', 'joint_3_u', 'joint_4_r', 'joint_5_b', 'joint_6_t'}
+state = {'ok': False}
+
+def callback(message):
+    state['ok'] = required.issubset(message.name)
+
+rclpy.init()
+node = Node('integration_joint_wait')
+node.create_subscription(
+    JointState,
+    '/yaskawa_hc10_1/joint_states',
+    callback,
+    QoSProfile(
+        history=HistoryPolicy.KEEP_LAST,
+        depth=1,
+        reliability=ReliabilityPolicy.RELIABLE,
+    ))
+deadline = time.monotonic() + 60.0
+while not state['ok'] and time.monotonic() < deadline:
+    rclpy.spin_once(node, timeout_sec=0.2)
+node.destroy_node()
+rclpy.shutdown()
+if not state['ok']:
+    raise SystemExit('ERREUR: aucun état articulaire HC10 complet après 60s')
+print('OK: état articulaire HC10 complet reçu')
+PY
+}
+
+wait_for_demo() {
+  local deadline=$((SECONDS + ${DEMO_TIMEOUT:-420}))
+  echo "Attente de la fin du cycle de démonstration..."
+  while (( SECONDS < deadline )); do
+    if grep -Fq 'Processus terminé (code 0)' "$demo_log"; then
+      echo "OK: cycle complet terminé."
+      return 0
+    fi
+    if grep -Eq 'Processus terminé \(code [1-9][0-9]*\)' "$demo_log"; then
+      tail -n 100 "$demo_log" >&2
+      return 1
+    fi
+    sleep 2
+  done
+  tail -n 100 "$demo_log" >&2
+  echo "ERREUR: la démo n'est pas terminée après ${DEMO_TIMEOUT:-420}s" >&2
+  return 1
+}
+
 gazebo_log="$log_dir/gazebo.log"
 perception_log="$log_dir/perception.log"
 moveit_log="$log_dir/moveit.log"
@@ -401,10 +457,12 @@ launch_terminal "3 - MoveIt 2 et RViz" "$repo_dir/moveit_rviz.sh" "$moveit_log"
 wait_for_service /compute_ik 60
 wait_for_service /get_planning_scene 60
 wait_for_service /clear_octomap 60
+wait_for_joints
 
 if [[ "${AUTO_RUN_DEMO:-1}" == "1" ]]; then
   launch_terminal "4 - Démonstration HC10" "$repo_dir/demo.sh" "$demo_log"
-  echo "Les quatre composants sont lancés."
+  wait_for_demo || fail "le cycle de démonstration a échoué; journal: $demo_log"
+  echo "Les quatre composants fonctionnent et la démonstration est terminée."
 else
   echo "Gazebo, perception et MoveIt/RViz sont prêts."
   echo "Lancer ./demo.sh manuellement pour démarrer le mouvement."
