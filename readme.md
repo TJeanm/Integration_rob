@@ -127,7 +127,7 @@ installées : `AUTO_SKIP_ROSDEP=1 ./auto_start.sh`.
 Cloner la branche de travail :
 
 ```bash
-git clone --branch integration-avancement \
+git clone --branch integration \
   https://github.com/TJeanm/Integration_rob.git
 cd Integration_rob
 ```
