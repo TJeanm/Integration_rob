@@ -361,15 +361,33 @@ PY
 wait_for_service() {
   local service=$1
   local timeout_seconds=$2
-  local deadline=$((SECONDS + timeout_seconds))
   echo "Attente du service $service..."
-  while (( SECONDS < deadline )); do
-    if ros2 service list 2>/dev/null | grep -Fxq "$service"; then
-      echo "OK: service disponible: $service"
-      return
-    fi
-    sleep 1
-  done
+  if python3 - "$service" "$timeout_seconds" <<'PYROS'
+import sys
+import rclpy
+from moveit_msgs.srv import GetPositionIK, GetPlanningScene
+from std_srvs.srv import Empty
+
+service, timeout_text = sys.argv[1:]
+service_types = {
+    '/compute_ik': GetPositionIK,
+    '/get_planning_scene': GetPlanningScene,
+    '/clear_octomap': Empty,
+}
+rclpy.init()
+node = rclpy.create_node('integration_wait_for_service')
+try:
+    client = node.create_client(service_types[service], service)
+    available = client.wait_for_service(timeout_sec=float(timeout_text))
+finally:
+    node.destroy_node()
+    rclpy.shutdown()
+raise SystemExit(0 if available else 1)
+PYROS
+  then
+    echo "OK: service disponible: $service"
+    return
+  fi
   tail -n 80 "$moveit_log" >&2
   fail "service indisponible après ${timeout_seconds}s: $service; journal: $moveit_log"
 }

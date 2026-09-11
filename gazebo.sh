@@ -117,6 +117,23 @@ spawn_model() {
 
 gz service -s "/world/${world_name}/remove" --reqtype gz.msgs.Entity --reptype gz.msgs.Boolean --timeout 5000 --req 'name: "yaskawa_hc10_1", type: 2' >/dev/null || true
 
+# Gazebo applies removal asynchronously. Wait for the old model to disappear
+# before reusing its name, otherwise the queued removal can delete the new HC10.
+deadline=$((SECONDS + spawn_timeout))
+while true; do
+  if model_list=$(timeout 15 gz model --list 2>&1); then
+    if ! grep -Eq '^[[:space:]]*-[[:space:]]+yaskawa_hc10_1[[:space:]]*$' <<<"$model_list" \
+        && grep -q 'Available models:' <<<"$model_list"; then
+      break
+    fi
+  fi
+  if (( SECONDS >= deadline )); then
+    echo "ERREUR: suppression du HC10 non confirmée; création annulée." >&2
+    exit 1
+  fi
+  sleep 1
+done
+
 spawn_model yaskawa_hc10_1 "$share/models/yaskawa_hc10.sdf" \
   'position: {x: -15.1622, y: -3.0, z: 0.62}, orientation: {z: 0.70710678, w: 0.70710678}'
 spawn_model mobile_pick_station "$share/models/mobile_pick_station.sdf" \
