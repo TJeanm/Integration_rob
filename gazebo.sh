@@ -26,6 +26,41 @@ spawn_timeout=${HC10_SPAWN_TIMEOUT:-120}
 share=$(ros2 pkg prefix --share hc10_pick_place_demo)
 create_service="/world/${world_name}/create"
 
+# Room 315 active normalement deux RGB-D 640x480 à 10 Hz. Une seule caméra
+# est utilisée ici; ce profil local réduit fortement la charge d'Ogre2 et DDS
+# sans modifier l'underlay externe.
+room_share=$(ros2 pkg prefix --share mfja_3rd_floor_description)
+source_rig="$room_share/models/room315_visual_observation_rig"
+runtime_root="$INTEGRATION_ROB_ROOT/.runtime_models"
+runtime_rig="$runtime_root/room315_visual_observation_rig"
+mkdir -p "$runtime_rig"
+cp "$source_rig/model.config" "$runtime_rig/model.config"
+python3 - "$source_rig/model.sdf" "$runtime_rig/model.sdf" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+source, destination = sys.argv[1:]
+tree = ET.parse(source)
+root = tree.getroot()
+for sensor in root.findall('.//sensor'):
+    name = sensor.get('name', '')
+    image = sensor.find('./camera/image')
+    if name == 'room315_right_rail_rgbd':
+        sensor.find('always_on').text = 'true'
+        sensor.find('update_rate').text = '2'
+        image.find('width').text = '320'
+        image.find('height').text = '240'
+    elif name == 'room315_left_rail_rgbd':
+        sensor.find('always_on').text = 'false'
+        sensor.find('update_rate').text = '1'
+        image.find('width').text = '160'
+        image.find('height').text = '120'
+tree.write(destination, encoding='unicode', xml_declaration=True)
+PY
+export GZ_SIM_RESOURCE_PATH="$runtime_root:${GZ_SIM_RESOURCE_PATH:-}"
+export GZ_SIM_MODEL_PATH="$runtime_root:${GZ_SIM_MODEL_PATH:-}"
+echo "Profil RGB-D léger: droite 320x240 à 2 Hz, gauche désactivée."
+
 # A previous terminal may leave Gazebo server / GUI processes alive. Two
 # servers publishing the same world on the same partition produce a grey GUI.
 # Les motifs restent volontairement tolérants: selon la version de ros_gz_sim
