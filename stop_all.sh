@@ -8,6 +8,7 @@ patterns=(
   'gz sim -r -s /tmp/room_315_only_.*[.]world'
   'gz sim -g .*room315_runtime_safe[.]gui[.]config'
   '__node:=room315_perception_camera_bridge'
+  '__node:=hc10_right_cloud_bridge'
   '__node:=room315_world_service_bridge'
   '__node:=room315_rail_safety_supervisor'
   '__node:=conveyor_loop_mode_controller'

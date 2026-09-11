@@ -16,10 +16,14 @@ export GZ_IP=${GZ_IP:-127.0.0.1}
 # Sur une VM où Mesa annonce aucune accélération, Ogre2 peut publier des
 # PointCloud2 entièrement NaN. Le rendu logiciel produit alors un vrai nuage.
 # Une machine accélérée conserve son GPU. La variable reste surchargeable.
+software_camera=0
 if [[ -z "${LIBGL_ALWAYS_SOFTWARE+x}" ]] && command -v glxinfo >/dev/null \
     && glxinfo -B 2>/dev/null | grep -q 'Accelerated: *no'; then
   export LIBGL_ALWAYS_SOFTWARE=1
+  software_camera=1
   echo "GPU non accéléré détecté: rendu logiciel Mesa activé pour la caméra RGB-D."
+elif [[ "${LIBGL_ALWAYS_SOFTWARE:-0}" == "1" ]]; then
+  software_camera=1
 fi
 world_name=${HC10_WORLD_NAME:-room_315_only}
 spawn_timeout=${HC10_SPAWN_TIMEOUT:-120}
@@ -45,14 +49,40 @@ for signal in TERM KILL; do
   fi
 done
 
+gui_in_launch=true
+if (( software_camera )); then
+  gui_in_launch=false
+fi
+
 ros2 launch mfja_3rd_floor_bringup "${world_name}.launch.py" \
-  robots:=yaskawa_hc10_1 gui:=true start_paused:=false \
+  robots:=yaskawa_hc10_1 gui:="$gui_in_launch" start_paused:=false \
   enable_room315_kinematic_shuttles:=false \
-  enable_room315_rail_safety_supervisor:=true \
-  enable_room315_rgbd_camera_bridge:=true \
+  enable_room315_rail_safety_supervisor:=false \
+  enable_room315_rgbd_camera_bridge:=false \
   gz_partition:="$GZ_PARTITION" &
 sim_pid=$!
-trap 'kill -INT "$sim_pid" 2>/dev/null || true' EXIT INT TERM
+
+# Le launch MFJA bridge normalement les images, profondeurs, camera_info et
+# points des deux caméras dans les deux sens. Cette démo ne consomme que le
+# PointCloud2 droit: un bridge directionnel unique évite sept flux lourds et
+# toute boucle ROS->Gazebo.
+ros2 run ros_gz_bridge parameter_bridge \
+  '/room_315/perception/right_rail_rgbd/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked' \
+  --ros-args -r __node:=hc10_right_cloud_bridge &
+camera_bridge_pid=$!
+
+gui_pid=
+if (( software_camera )); then
+  gui_config=$(ros2 pkg prefix --share mfja_robot_control_config)/config/room315_runtime_safe.gui.config
+  env -u LIBGL_ALWAYS_SOFTWARE gz sim -g --gui-config "$gui_config" &
+  gui_pid=$!
+  echo "GUI Gazebo séparée du rendu logiciel de la caméra."
+fi
+
+cleanup() {
+  kill -INT "$sim_pid" "$camera_bridge_pid" ${gui_pid:+"$gui_pid"} 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
 
 echo "Attente du service Gazebo $create_service (max ${spawn_timeout}s, partition $GZ_PARTITION)..."
 deadline=$((SECONDS + spawn_timeout))
