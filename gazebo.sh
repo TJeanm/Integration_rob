@@ -13,6 +13,14 @@ export GZ_PARTITION=${GZ_PARTITION:-mfja_pick_place}
 # the VMware adapter can leave the GUI connected to no scene (uniform grey).
 # Surchargeable si la machine a besoin d'une autre interface.
 export GZ_IP=${GZ_IP:-127.0.0.1}
+# Sur une VM où Mesa annonce aucune accélération, Ogre2 peut publier des
+# PointCloud2 entièrement NaN. Le rendu logiciel produit alors un vrai nuage.
+# Une machine accélérée conserve son GPU. La variable reste surchargeable.
+if [[ -z "${LIBGL_ALWAYS_SOFTWARE+x}" ]] && command -v glxinfo >/dev/null \
+    && glxinfo -B 2>/dev/null | grep -q 'Accelerated: *no'; then
+  export LIBGL_ALWAYS_SOFTWARE=1
+  echo "GPU non accéléré détecté: rendu logiciel Mesa activé pour la caméra RGB-D."
+fi
 world_name=${HC10_WORLD_NAME:-room_315_only}
 spawn_timeout=${HC10_SPAWN_TIMEOUT:-120}
 share=$(ros2 pkg prefix --share hc10_pick_place_demo)

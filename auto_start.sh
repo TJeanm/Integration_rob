@@ -61,9 +61,15 @@ puis relancer ./auto_start.sh (ou AUTO_SKIP_ROSDEP=1 ./auto_start.sh pour passer
 
 install_dependencies() {
   local base_path=$1
+  local skip_keys=${2:-}
   (( rosdep_usable )) || return 0
   echo "Installation des dépendances ROS de $base_path (sudo peut demander le mot de passe)..."
-  rosdep install --from-paths "$base_path" --ignore-src -r -y --rosdistro "$ros_distro" \
+  local command=(rosdep install --from-paths "$base_path" --ignore-src -r -y
+    --rosdistro "$ros_distro")
+  if [[ -n "$skip_keys" ]]; then
+    command+=(--skip-keys "$skip_keys")
+  fi
+  "${command[@]}" \
     || warn "rosdep n'a pas résolu toutes les dépendances de $base_path"
 }
 
@@ -145,7 +151,10 @@ clone_mfja_sources() {
 
 build_underlay() {
   local source_root=$1
-  install_dependencies "$source_root"
+  # Torch sert aux outils IA optionnels de Room 315. La simulation HC10,
+  # les caméras et les bridges ne l'utilisent pas; ne pas imposer ~1 Go de
+  # paquets ni une demande sudo inutile sur une machine vierge.
+  install_dependencies "$source_root" "python3-torch python3-torchvision"
   echo "Compilation de l'underlay Room 315 depuis $source_root..."
   mkdir -p "$cache_root/mfja_underlay"
   colcon --log-base "$cache_root/mfja_underlay/log" build \

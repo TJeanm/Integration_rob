@@ -127,7 +127,10 @@ class Hc10MfjaControlAdapter(Node):
             goal_handle.request.goal_tolerance,
             float(self.get_parameter('goal_tolerance').value))
         target = dict(zip(trajectory.joint_names, trajectory.points[-1].positions))
-        start = time.monotonic()
+        # La trajectoire est cadencée par Gazebo. Sur une VM en rendu logiciel,
+        # le temps simulé avance moins vite que le temps mural; un timeout mural
+        # annulerait alors un mouvement pourtant sain avant sa fin.
+        start_sim = self.get_clock().now().nanoseconds * 1e-9
 
         while rclpy.ok():
             if goal_handle.is_cancel_requested:
@@ -152,13 +155,14 @@ class Hc10MfjaControlAdapter(Node):
                 target[name] - positions.get(name, target[name]) for name in trajectory.joint_names]
             goal_handle.publish_feedback(feedback)
 
-            if time.monotonic() - start >= duration:
+            elapsed_sim = self.get_clock().now().nanoseconds * 1e-9 - start_sim
+            if elapsed_sim >= duration:
                 if all(abs(positions[name] - target[name]) <= tolerance[name] for name in JOINTS):
                     goal_handle.succeed()
                     result.error_code = FollowJointTrajectory.Result.SUCCESSFUL
                     result.error_string = 'Final position reached'
                     return result
-            if time.monotonic() - start > timeout:
+            if elapsed_sim > timeout:
                 goal_handle.abort()
                 result.error_code = FollowJointTrajectory.Result.GOAL_TOLERANCE_VIOLATED
                 result.error_string = 'Final position was not reached before timeout'
