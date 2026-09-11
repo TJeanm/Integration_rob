@@ -433,9 +433,10 @@ class Demo(Node):
         future = self.cartesian_client.call_async(request)
         rclpy.spin_until_future_complete(self, future, timeout_sec=20)
         response = future.result()
-        if (response is None or response.fraction < 0.999) and 'remontée' in label:
-            # En dégagement vertical après dépôt, l'OctoMap perçoit la pièce déposée au contact des mors.
-            # Le dégagement vertical s'éloigne naturellement de la pièce et du convoyeur.
+        if (response is None or response.fraction < 0.999) and ('remontée' in label or 'descente' in label):
+            # En approche finale ou dégagement vertical (prise ou dépose), l'OctoMap perçoit
+            # la proximité immédiate de l'objet ou du support (ex: fraction à 98%).
+            # Le déplacement en ligne droite pure est strictement contrôlé géométriquement par FK ci-dessous.
             request.avoid_collisions = False
             future = self.cartesian_client.call_async(request)
             rclpy.spin_until_future_complete(self, future, timeout_sec=20)
