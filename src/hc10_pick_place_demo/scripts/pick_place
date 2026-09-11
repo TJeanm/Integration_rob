@@ -2,10 +2,14 @@
 """Collision-aware HC10 motion with a simulated gripper cycle."""
 
 import os
+import threading
 import time
 
 import rclpy
 from geometry_msgs.msg import Pose, PoseStamped
+from ros_gz_interfaces.msg import Entity
+from ros_gz_interfaces.srv import SetEntityPose
+from tf2_ros import Buffer, TransformListener
 from moveit_msgs.msg import (
     BoundingVolume,
     Constraints,
@@ -27,14 +31,14 @@ from moveit_msgs.action import ExecuteTrajectory
 from moveit_msgs.srv import GetPlanningScene
 from moveit_msgs.msg import PlanningSceneComponents
 from sensor_msgs.msg import JointState
-from std_msgs.msg import Empty as EmptyMsg, Float64
+from std_msgs.msg import Float64
 from std_srvs.srv import Empty, Trigger
 from trajectory_msgs.msg import JointTrajectory
 from shape_msgs.msg import SolidPrimitive
 
 JOINTS = ['joint_1_s', 'joint_2_l', 'joint_3_u', 'joint_4_r', 'joint_5_b', 'joint_6_t']
 HOME = [0.0] * 6
-CONVEYOR = (-0.86, -0.212, 0.27)
+CONVEYOR = (-0.86, -0.212, 0.35)
 # Centre du plateau porté par TIAGo, dans le repère base_link du HC10.
 # Le plateau est à z≈0.225 et le cube 60 mm à z≈0.255 (centre).
 # Le TCP descend à z=0.240 pour aligner les patins de la pince avec le cube
@@ -65,8 +69,6 @@ class Demo(Node):
         self.grip = self.create_publisher(
             Float64, '/yaskawa_hc10_1/gripper/position_command', 1
         )
-        self.attach_pub = self.create_publisher(EmptyMsg, '/red_cube/attach', 1)
-        self.detach_pub = self.create_publisher(EmptyMsg, '/red_cube/detach', 1)
         self.display = self.create_publisher(DisplayTrajectory, '/display_planned_path', 1)
         self.joint_subscription = self.create_subscription(
             JointState, '/yaskawa_hc10_1/joint_states', self.states.append, 1
@@ -78,6 +80,11 @@ class Demo(Node):
         self.fk_client = self.create_client(GetPositionFK, '/compute_fk')
         self.plan_client = self.create_client(GetMotionPlan, '/plan_kinematic_path')
         self.cartesian_client = self.create_client(GetCartesianPath, '/compute_cartesian_path')
+        self.pose_client = self.create_client(SetEntityPose, '/world/room_315_only/set_pose')
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+        self.cube_attached = False
+        self.attach_thread = None
 
     def on_cube_pose(self, msg):
         self.detected_cube_pose = msg
@@ -401,6 +408,13 @@ class Demo(Node):
         future = self.cartesian_client.call_async(request)
         rclpy.spin_until_future_complete(self, future, timeout_sec=20)
         response = future.result()
+        if (response is None or response.fraction < 0.999) and 'remontée' in label:
+            # En dégagement vertical après dépôt, l'OctoMap perçoit la pièce déposée au contact des mors.
+            # Le dégagement vertical s'éloigne naturellement de la pièce et du convoyeur.
+            request.avoid_collisions = False
+            future = self.cartesian_client.call_async(request)
+            rclpy.spin_until_future_complete(self, future, timeout_sec=20)
+            response = future.result()
         if response is None or response.fraction < 0.999:
             fraction = 0.0 if response is None else response.fraction
             raise RuntimeError(f'{label} bloquée par une collision: {fraction:.0%} réalisable')
@@ -412,18 +426,58 @@ class Demo(Node):
         print(f'{label}: X/Y constants, pose finale vérifiée par FK', flush=True)
         self.show_and_execute(response.solution.joint_trajectory)
 
+    def start_attachment(self):
+        self.cube_attached = True
+        self.attach_thread = threading.Thread(target=self._attachment_loop, daemon=True)
+        self.attach_thread.start()
+
+    def stop_attachment(self):
+        self.cube_attached = False
+        if self.attach_thread:
+            self.attach_thread.join(timeout=0.5)
+
+    def _attachment_loop(self):
+        while self.cube_attached and rclpy.ok():
+            try:
+                t = self.tf_buffer.lookup_transform(
+                    'base_link', 'gripper_tcp', rclpy.time.Time()
+                )
+                p = t.transform.translation
+                # Le HC10 est fixé en (-15.1622, -3.0, 0.62) avec un lacet de +90°
+                # Conversion repère base_link du robot vers coordonnées monde Gazebo :
+                xw = -15.1622 - p.y
+                yw = -3.0 + p.x
+                zw = 0.62 + p.z - 0.02
+                req = SetEntityPose.Request()
+                req.entity.name = 'red_cube'
+                req.entity.type = Entity.MODEL
+                req.pose.position.x = xw
+                req.pose.position.y = yw
+                req.pose.position.z = zw
+                req.pose.orientation.w = 1.0
+                self.pose_client.call_async(req)
+            except Exception:
+                pass
+            time.sleep(0.02)
+
     def gripper(self, opening):
         if self.dry_run:
             print(f'DRY-RUN: commande pince {opening:.3f} m ignorée', flush=True)
             return
-        self.grip.publish(Float64(data=opening))
-        if opening <= 0.02:
-            self.attach_pub.publish(EmptyMsg())
+        if opening < 0.02:
+            self.grip.publish(Float64(data=opening))
+            end = time.monotonic() + 1.2
+            while time.monotonic() < end:
+                rclpy.spin_once(self, timeout_sec=0.05)
+            self.start_attachment()
+            print('Cube saisi et verrouillé dans la pince HC10', flush=True)
         else:
-            self.detach_pub.publish(EmptyMsg())
-        end = time.monotonic() + 2.0
-        while time.monotonic() < end:
-            rclpy.spin_once(self, timeout_sec=0.05)
+            self.stop_attachment()
+            self.grip.publish(Float64(data=opening))
+            print('Cube déposé sur le convoyeur', flush=True)
+            end = time.monotonic() + 1.2
+            while time.monotonic() < end:
+                rclpy.spin_once(self, timeout_sec=0.05)
 
 
 rclpy.init()

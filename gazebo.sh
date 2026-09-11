@@ -105,8 +105,6 @@ sim_pid=$!
 # toute boucle ROS->Gazebo.
 ros2 run ros_gz_bridge parameter_bridge \
   '/room_315/perception/right_rail_rgbd/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked' \
-  '/red_cube/attach@std_msgs/msg/Empty]gz.msgs.Empty' \
-  '/red_cube/detach@std_msgs/msg/Empty]gz.msgs.Empty' \
   --ros-args -r __node:=hc10_right_cloud_bridge &
 camera_bridge_pid=$!
 
@@ -177,11 +175,11 @@ done
 spawn_model yaskawa_hc10_1 "$share/models/yaskawa_hc10.sdf" \
   'position: {x: -15.1622, y: -3.0, z: 0.62}, orientation: {z: 0.70710678, w: 0.70710678}'
 spawn_model tiago_delivery "$tiago_runtime_model" \
-  'position: {x: -14.1122, y: -5.15, z: 0.02}, orientation: {z: 0.70710678, w: 0.70710678}'
+  'position: {x: -7.20, y: -0.85, z: 0.02}, orientation: {z: 1.0, w: 0.0}'
 spawn_model tiago_delivery_payload "$share/models/tiago_delivery_payload.sdf" \
-  'position: {x: -14.1122, y: -4.6}, orientation: {z: 0.70710678, w: 0.70710678}'
+  'position: {x: -7.75, y: -0.85, z: 0.0}, orientation: {z: 1.0, w: 0.0}'
 spawn_model red_cube "$share/models/red_cube.sdf" \
-  'position: {x: -14.1122, y: -4.6, z: 0.875}, orientation: {z: 0.70710678, w: 0.70710678}'
+  'position: {x: -7.75, y: -0.85, z: 0.875}'
 ros2 run hc10_pick_place_demo tiago_delivery &
 delivery_pid=$!
 if [[ "${HC10_TEST_OBSTACLE:-1}" == "1" ]]; then

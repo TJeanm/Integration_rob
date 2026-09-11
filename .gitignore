@@ -12,3 +12,5 @@ log/
 /src/motoman_ros2_support_packages/
 .mfja_underlay
 *.patch
+*.webm
+*.mp4

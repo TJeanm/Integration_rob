@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Animate the Room 315 TIAGo delivery and expose deterministic hand-off services."""
+"""Animate the Room 315 TIAGo delivery from the entrance door and expose hand-off services."""
 
+import math
 import threading
 import time
 
@@ -11,14 +12,22 @@ from ros_gz_interfaces.msg import Entity
 from ros_gz_interfaces.srv import SetEntityPose
 from std_srvs.srv import Trigger
 
-# Le socle reste 55 cm derrière le plateau afin que le mât TIAGo ne soit pas
-# sous le point de prise. Avec yaw=+90°, le plateau est devant le robot.
-START_Y = -5.15
-DOCK_Y = -3.55
-TRAY_OFFSET_Y = 0.55
-WORLD_X = -14.1122
-YAW_Z = 0.70710678
-YAW_W = 0.70710678
+# Waypoints de la trajectoire depuis la porte d'entrée de la salle 315 :
+# 1. Départ à la porte d'entrée : X = -7.20, Y = -0.85, cap Ouest (yaw = 180° = pi)
+# 2. Virage au coin de l'allée : X = -14.1122, Y = -0.85 (rotation 90° vers le Sud, yaw = -90°)
+# 3. Quai de déchargement HC10 : X = -14.1122, Y = -2.45
+# Le plateau est monté à 55 cm dans le sens d'avancement du TIAGo.
+# Au quai, avec yaw = -90° (vers -Y), le plateau est à Y = -2.45 - 0.55 = -3.00 (point de prise HC10).
+DOOR_X = -7.20
+CORNER_X = -14.1122
+AISLE_Y = -0.85
+DOCK_Y = -2.45
+TRAY_OFFSET = 0.55
+
+
+def smoothstep(r: float) -> float:
+    r = max(0.0, min(1.0, r))
+    return r * r * (3.0 - 2.0 * r)
 
 
 class TiagoDelivery(Node):
@@ -32,75 +41,131 @@ class TiagoDelivery(Node):
         self.moving = False
         self.lock = threading.Lock()
         self.timer = self.create_timer(1.0, self.start_arrival)
-        self.get_logger().info('TIAGo prêt à livrer la pièce au HC10')
+        self.get_logger().info("TIAGo prêt à livrer depuis la porte d'entrée de la salle 315")
 
     def start_arrival(self):
         self.timer.cancel()
-        self.launch_move(START_Y, DOCK_Y, True)
+        self.launch_move(True)
 
-    def launch_move(self, begin, end, arriving):
+    def launch_move(self, arriving: bool):
         with self.lock:
             if self.moving:
                 return False
             self.moving = True
         threading.Thread(
-            target=self.move, args=(begin, end, arriving), daemon=True).start()
+            target=self.move_routine, args=(arriving,), daemon=True).start()
         return True
 
-    def set_pose(self, name, y):
-        request = SetEntityPose.Request()
-        request.entity.name = name
-        request.entity.type = Entity.MODEL
-        request.pose.position.x = WORLD_X
-        if name in ('tiago_delivery_payload', 'red_cube'):
-            request.pose.position.y = y + TRAY_OFFSET_Y
-        else:
-            request.pose.position.y = y
-        if name == 'tiago_delivery':
-            request.pose.position.z = 0.02
-        elif name == 'red_cube':
-            request.pose.position.z = 0.875
-        else:
-            request.pose.position.z = 0.0
-        request.pose.orientation.z = YAW_Z
-        request.pose.orientation.w = YAW_W
-        future = self.pose_client.call_async(request)
-        deadline = time.monotonic() + 2.0
-        while not future.done() and time.monotonic() < deadline:
-            time.sleep(0.02)
-        return future.done() and future.result() is not None and future.result().success
+    def set_actor_poses(self, x: float, y: float, theta: float, with_cube: bool):
+        # TIAGo base
+        qz = math.sin(theta / 2.0)
+        qw = math.cos(theta / 2.0)
 
-    def move(self, begin, end, arriving):
+        req_robot = SetEntityPose.Request()
+        req_robot.entity.name = 'tiago_delivery'
+        req_robot.entity.type = Entity.MODEL
+        req_robot.pose.position.x = x
+        req_robot.pose.position.y = y
+        req_robot.pose.position.z = 0.02
+        req_robot.pose.orientation.z = qz
+        req_robot.pose.orientation.w = qw
+        self.pose_client.call_async(req_robot)
+
+        # Plateau payload : décalé de TRAY_OFFSET selon le cap theta
+        x_tray = x + TRAY_OFFSET * math.cos(theta)
+        y_tray = y + TRAY_OFFSET * math.sin(theta)
+
+        req_payload = SetEntityPose.Request()
+        req_payload.entity.name = 'tiago_delivery_payload'
+        req_payload.entity.type = Entity.MODEL
+        req_payload.pose.position.x = x_tray
+        req_payload.pose.position.y = y_tray
+        req_payload.pose.position.z = 0.0
+        req_payload.pose.orientation.z = qz
+        req_payload.pose.orientation.w = qw
+        self.pose_client.call_async(req_payload)
+
+        # Cube rouge sur le plateau (si le TIAGo amène la pièce)
+        if with_cube:
+            req_cube = SetEntityPose.Request()
+            req_cube.entity.name = 'red_cube'
+            req_cube.entity.type = Entity.MODEL
+            req_cube.pose.position.x = x_tray
+            req_cube.pose.position.y = y_tray
+            req_cube.pose.position.z = 0.875
+            req_cube.pose.orientation.z = 0.0
+            req_cube.pose.orientation.w = 1.0
+            self.pose_client.call_async(req_cube)
+
+    def move_routine(self, arriving: bool):
         try:
             if not self.pose_client.wait_for_service(timeout_sec=20.0):
                 self.get_logger().error('Service Gazebo set_pose indisponible')
                 return
-            steps = 32
-            for index in range(steps + 1):
-                ratio = index / steps
-                ratio = ratio * ratio * (3.0 - 2.0 * ratio)
-                y = begin + (end - begin) * ratio
-                ok_robot = self.set_pose('tiago_delivery', y)
-                ok_payload = self.set_pose('tiago_delivery_payload', y)
-                if arriving:
-                    self.set_pose('red_cube', y)
-                if not (ok_robot and ok_payload):
-                    self.get_logger().error('Déplacement TIAGo refusé par Gazebo')
-                    return
-                time.sleep(0.12)
-            self.arrived = arriving
-            message = 'TIAGo à quai, pièce disponible' if arriving else 'TIAGo reparti'
-            self.get_logger().info(message)
+
+            dt = 0.06
+
+            if arriving:
+                # Étape 1 : Allée depuis la porte (X: DOOR_X -> CORNER_X, cap Ouest = pi)
+                steps_aisle = 40
+                for i in range(steps_aisle + 1):
+                    r = smoothstep(i / steps_aisle)
+                    x = DOOR_X + (CORNER_X - DOOR_X) * r
+                    self.set_actor_poses(x, AISLE_Y, math.pi, with_cube=True)
+                    time.sleep(dt)
+
+                # Étape 2 : Virage de 90° vers le Sud (theta: pi -> 3*pi/2 = -pi/2)
+                steps_turn = 20
+                for i in range(steps_turn + 1):
+                    r = smoothstep(i / steps_turn)
+                    theta = math.pi + r * (math.pi / 2.0)
+                    self.set_actor_poses(CORNER_X, AISLE_Y, theta, with_cube=True)
+                    time.sleep(dt)
+
+                # Étape 3 : Entrée dans la cellule jusqu'au quai (Y: AISLE_Y -> DOCK_Y, cap Sud = -pi/2)
+                steps_dock = 25
+                for i in range(steps_dock + 1):
+                    r = smoothstep(i / steps_dock)
+                    y = AISLE_Y + (DOCK_Y - AISLE_Y) * r
+                    self.set_actor_poses(CORNER_X, y, -math.pi / 2.0, with_cube=True)
+                    time.sleep(dt)
+
+                self.arrived = True
+                self.get_logger().info("TIAGo à quai depuis la porte d'entrée, pièce disponible")
+            else:
+                # Étape 1 : Sortie de la cellule (Y: DOCK_Y -> AISLE_Y)
+                steps_exit = 25
+                for i in range(steps_exit + 1):
+                    r = smoothstep(i / steps_exit)
+                    y = DOCK_Y + (AISLE_Y - DOCK_Y) * r
+                    self.set_actor_poses(CORNER_X, y, -math.pi / 2.0, with_cube=False)
+                    time.sleep(dt)
+
+                # Étape 2 : Virage vers l'Est (theta: -pi/2 -> 0)
+                steps_turn = 20
+                for i in range(steps_turn + 1):
+                    r = smoothstep(i / steps_turn)
+                    theta = -math.pi / 2.0 + r * (math.pi / 2.0)
+                    self.set_actor_poses(CORNER_X, AISLE_Y, theta, with_cube=False)
+                    time.sleep(dt)
+
+                # Étape 3 : Retour vers la porte (X: CORNER_X -> DOOR_X, cap Est = 0)
+                steps_aisle = 40
+                for i in range(steps_aisle + 1):
+                    r = smoothstep(i / steps_aisle)
+                    x = CORNER_X + (DOOR_X - CORNER_X) * r
+                    self.set_actor_poses(x, AISLE_Y, 0.0, with_cube=False)
+                    time.sleep(dt)
+
+                self.arrived = False
+                self.get_logger().info("TIAGo retourné à la porte d'entrée")
         finally:
             with self.lock:
                 self.moving = False
 
     def ready(self, _request, response):
-        # Après un premier cycle le TIAGo est revenu au point de départ. Un
-        # nouvel appel par demo.sh relance donc automatiquement une livraison.
         if not self.arrived and not self.moving:
-            self.set_pose('red_cube', START_Y)
-            self.launch_move(START_Y, DOCK_Y, True)
+            self.launch_move(True)
         response.success = self.arrived and not self.moving
         response.message = 'TIAGo à quai' if response.success else 'TIAGo en approche'
         return response
@@ -110,7 +175,7 @@ class TiagoDelivery(Node):
             response.success = False
             response.message = 'TIAGo indisponible ou déjà en mouvement'
             return response
-        response.success = self.launch_move(DOCK_Y, START_Y, False)
+        response.success = self.launch_move(False)
         response.message = ('Départ TIAGo lancé' if response.success
                             else 'TIAGo déjà en mouvement')
         return response

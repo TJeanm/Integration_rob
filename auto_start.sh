@@ -318,6 +318,9 @@ echo "Nettoyage des anciennes instances..."
 
 cleanup_after_failure() {
   local status=$?
+  if [[ -n "${screencast_info:-}" && -f "$screencast_info" ]]; then
+    python3 "$repo_dir/scripts/screen_recorder.py" stop --info-file "$screencast_info" >/dev/null 2>&1 || true
+  fi
   if (( status != 0 )); then
     echo "Échec du lancement: arrêt des composants déjà ouverts." >&2
     "$repo_dir/stop_all.sh" >/dev/null 2>&1 || true
@@ -561,6 +564,27 @@ wait_for_service /get_planning_scene 60
 wait_for_service /clear_octomap 60
 wait_for_joints
 
+screencast_info=
+if [[ "${RECORD_VIDEO:-0}" == "1" ]]; then
+  echo "Démarrage de l'enregistrement vidéo de la démonstration..."
+  screencast_info="/tmp/hc10_screencast_${UID:-1000}.json"
+  rm -f "$screencast_info"
+  python3 "$repo_dir/scripts/screen_recorder.py" run --info-file "$screencast_info" &
+  screencast_pid=$!
+  for _ in {1..30}; do
+    if [[ -f "$screencast_info" ]]; then
+      break
+    fi
+    sleep 0.2
+  done
+  if [[ -f "$screencast_info" ]]; then
+    echo "Enregistrement vidéo actif (PID $screencast_pid)"
+  else
+    warn "Impossible d'activer l'enregistrement vidéo GNOME Screencast."
+    screencast_info=
+  fi
+fi
+
 if [[ "${AUTO_RUN_DEMO:-1}" == "1" ]]; then
   launch_terminal "4 - Démonstration HC10" "$repo_dir/demo.sh" "$demo_log"
   wait_for_demo || fail "le cycle de démonstration a échoué; journal: $demo_log"
@@ -568,6 +592,19 @@ if [[ "${AUTO_RUN_DEMO:-1}" == "1" ]]; then
 else
   echo "Gazebo, perception et MoveIt/RViz sont prêts."
   echo "Lancer ./demo.sh manuellement pour démarrer le mouvement."
+fi
+
+if [[ -n "${screencast_info:-}" && -f "$screencast_info" ]]; then
+  echo "Fin de la démonstration: finalisation de l'enregistrement (3s)..."
+  sleep 3
+  python3 "$repo_dir/scripts/screen_recorder.py" stop --info-file "$screencast_info"
+  target_webm="$repo_dir/demo_simulation.webm"
+  target_mp4="$repo_dir/demo_simulation.mp4"
+  python3 "$repo_dir/scripts/screen_recorder.py" convert \
+    --info-file "$screencast_info" \
+    --target-webm "$target_webm" \
+    --target-mp4 "$target_mp4"
+  rm -f "$screencast_info"
 fi
 
 trap - EXIT

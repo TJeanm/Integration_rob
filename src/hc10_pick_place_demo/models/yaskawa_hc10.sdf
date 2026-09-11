@@ -596,15 +596,5 @@
       <initial_position>0.0</initial_position>
     </plugin>
 
-    <plugin filename="gz-sim-detachable-joint-system"
-            name="gz::sim::systems::DetachableJoint">
-      <parent_link>gripper_tcp</parent_link>
-      <child_model>red_cube</child_model>
-      <child_link>object_link</child_link>
-      <detach_topic>/red_cube/detach</detach_topic>
-      <attach_topic>/red_cube/attach</attach_topic>
-      <output_topic>/red_cube/attachment_state</output_topic>
-    </plugin>
-
   </model>
 </sdf>
