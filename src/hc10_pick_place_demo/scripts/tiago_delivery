@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""Animate the Room 315 TIAGo delivery and expose deterministic hand-off services."""
+
+import threading
+import time
+
+import rclpy
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.node import Node
+from ros_gz_interfaces.msg import Entity
+from ros_gz_interfaces.srv import SetEntityPose
+from std_srvs.srv import Trigger
+
+# Le socle reste 55 cm derrière le plateau afin que le mât TIAGo ne soit pas
+# sous le point de prise. Avec yaw=+90°, le plateau est devant le robot.
+START_Y = -5.15
+DOCK_Y = -3.55
+TRAY_OFFSET_Y = 0.55
+WORLD_X = -14.1122
+YAW_Z = 0.70710678
+YAW_W = 0.70710678
+
+
+class TiagoDelivery(Node):
+    def __init__(self):
+        super().__init__('hc10_tiago_delivery')
+        self.pose_client = self.create_client(
+            SetEntityPose, '/world/room_315_only/set_pose')
+        self.create_service(Trigger, '/hc10/tiago_ready', self.ready)
+        self.create_service(Trigger, '/hc10/tiago_depart', self.depart)
+        self.arrived = False
+        self.moving = False
+        self.lock = threading.Lock()
+        self.timer = self.create_timer(1.0, self.start_arrival)
+        self.get_logger().info('TIAGo prêt à livrer la pièce au HC10')
+
+    def start_arrival(self):
+        self.timer.cancel()
+        self.launch_move(START_Y, DOCK_Y, True)
+
+    def launch_move(self, begin, end, arriving):
+        with self.lock:
+            if self.moving:
+                return False
+            self.moving = True
+        threading.Thread(
+            target=self.move, args=(begin, end, arriving), daemon=True).start()
+        return True
+
+    def set_pose(self, name, y):
+        request = SetEntityPose.Request()
+        request.entity.name = name
+        request.entity.type = Entity.MODEL
+        request.pose.position.x = WORLD_X
+        request.pose.position.y = y + (TRAY_OFFSET_Y if name == 'tiago_delivery_payload' else 0.0)
+        request.pose.position.z = 0.02 if name == 'tiago_delivery' else 0.0
+        request.pose.orientation.z = YAW_Z
+        request.pose.orientation.w = YAW_W
+        future = self.pose_client.call_async(request)
+        deadline = time.monotonic() + 2.0
+        while not future.done() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        return future.done() and future.result() is not None and future.result().success
+
+    def move(self, begin, end, arriving):
+        try:
+            if not self.pose_client.wait_for_service(timeout_sec=20.0):
+                self.get_logger().error('Service Gazebo set_pose indisponible')
+                return
+            steps = 32
+            for index in range(steps + 1):
+                ratio = index / steps
+                ratio = ratio * ratio * (3.0 - 2.0 * ratio)
+                y = begin + (end - begin) * ratio
+                ok_robot = self.set_pose('tiago_delivery', y)
+                ok_payload = self.set_pose('tiago_delivery_payload', y)
+                if not (ok_robot and ok_payload):
+                    self.get_logger().error('Déplacement TIAGo refusé par Gazebo')
+                    return
+                time.sleep(0.12)
+            self.arrived = arriving
+            message = 'TIAGo à quai, pièce disponible' if arriving else 'TIAGo reparti'
+            self.get_logger().info(message)
+        finally:
+            with self.lock:
+                self.moving = False
+
+    def ready(self, _request, response):
+        # Après un premier cycle le TIAGo est revenu au point de départ. Un
+        # nouvel appel par demo.sh relance donc automatiquement une livraison.
+        if not self.arrived and not self.moving:
+            self.launch_move(START_Y, DOCK_Y, True)
+        response.success = self.arrived and not self.moving
+        response.message = 'TIAGo à quai' if response.success else 'TIAGo en approche'
+        return response
+
+    def depart(self, _request, response):
+        if not self.arrived or self.moving:
+            response.success = False
+            response.message = 'TIAGo indisponible ou déjà en mouvement'
+            return response
+        response.success = self.launch_move(DOCK_Y, START_Y, False)
+        response.message = ('Départ TIAGo lancé' if response.success
+                            else 'TIAGo déjà en mouvement')
+        return response
+
+
+def main():
+    rclpy.init()
+    node = TiagoDelivery()
+    executor = MultiThreadedExecutor(num_threads=2)
+    executor.add_node(node)
+    try:
+        executor.spin()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        executor.shutdown()
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()

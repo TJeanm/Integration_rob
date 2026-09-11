@@ -17,18 +17,55 @@ export GZ_IP=${GZ_IP:-127.0.0.1}
 # PointCloud2 entièrement NaN. Le rendu logiciel produit alors un vrai nuage.
 # Une machine accélérée conserve son GPU. La variable reste surchargeable.
 software_camera=0
-if [[ -z "${LIBGL_ALWAYS_SOFTWARE+x}" ]] && command -v glxinfo >/dev/null \
-    && glxinfo -B 2>/dev/null | grep -q 'Accelerated: *no'; then
-  export LIBGL_ALWAYS_SOFTWARE=1
-  software_camera=1
-  echo "GPU non accéléré détecté: rendu logiciel Mesa activé pour la caméra RGB-D."
+if [[ -z "${LIBGL_ALWAYS_SOFTWARE+x}" ]]; then
+  is_software=0
+  if command -v glxinfo >/dev/null && glxinfo -B 2>/dev/null | grep -q 'Accelerated: *no'; then
+    is_software=1
+  elif grep -Eiq 'vmware|virtualbox|qemu|kvm' /sys/class/dmi/id/product_name 2>/dev/null || \
+       grep -Eiq 'vmware|virtualbox|qemu|kvm' /sys/class/dmi/id/sys_vendor 2>/dev/null; then
+    is_software=1
+  fi
+  if (( is_software )); then
+    export LIBGL_ALWAYS_SOFTWARE=1
+    software_camera=1
+    echo "GPU non accéléré / VM détecté: rendu logiciel Mesa activé pour la caméra RGB-D."
+  fi
 elif [[ "${LIBGL_ALWAYS_SOFTWARE:-0}" == "1" ]]; then
   software_camera=1
 fi
+
 world_name=${HC10_WORLD_NAME:-room_315_only}
 spawn_timeout=${HC10_SPAWN_TIMEOUT:-120}
-share=$(ros2 pkg prefix --share hc10_pick_place_demo)
+share=$(ros2 pkg prefix --share hc10_pick_place_demo 2>/dev/null || true)
+room_share=$(ros2 pkg prefix --share mfja_3rd_floor_description 2>/dev/null || true)
+
+if [[ -z "$room_share" ]] || [[ ! -d "$room_share" ]]; then
+  echo "ERREUR: Le paquet mfja_3rd_floor_description est introuvable." >&2
+  echo "Vérifiez que l'underlay Room 315 est sourcé (ex: source setup_env.sh)." >&2
+  exit 1
+fi
+if [[ -z "$share" ]] || [[ ! -d "$share" ]]; then
+  echo "ERREUR: Le paquet hc10_pick_place_demo est introuvable." >&2
+  echo "Vérifiez que le workspace est compilé (colcon build --symlink-install)." >&2
+  exit 1
+fi
+
 create_service="/world/${world_name}/create"
+# La base TIAGo native est dynamique et ses collisions mesh provoquent une
+# tempête de contacts ODE lorsqu'elle est animée par set_pose. Cette copie
+# temporaire devient cinématique: même modèle visuel, sans coût physique.
+tiago_runtime_model=$(mktemp --suffix=-tiago_delivery.sdf)
+tiago_src="$room_share/models/tiago_base/model.sdf"
+if [[ ! -f "$tiago_src" ]]; then
+  echo "ERREUR: Modèle TIAGo source introuvable: $tiago_src" >&2
+  exit 1
+fi
+sed '0,/<model name="tiago_base">/s//&\n    <static>true<\/static>/' \
+  "$tiago_src" > "$tiago_runtime_model"
+if [[ ! -s "$tiago_runtime_model" ]]; then
+  echo "ERREUR: Échec de génération du modèle TIAGo cinématique temporaire." >&2
+  exit 1
+fi
 
 # A previous terminal may leave Gazebo server / GUI processes alive. Two
 # servers publishing the same world on the same partition produce a grey GUI.
@@ -73,7 +110,8 @@ camera_bridge_pid=$!
 
 gui_pid=
 cleanup() {
-  kill -INT "$sim_pid" "$camera_bridge_pid" ${gui_pid:+"$gui_pid"} 2>/dev/null || true
+  kill -INT "$sim_pid" "$camera_bridge_pid" ${delivery_pid:+"$delivery_pid"} ${gui_pid:+"$gui_pid"} 2>/dev/null || true
+  rm -f "$tiago_runtime_model"
 }
 trap cleanup EXIT INT TERM
 
@@ -96,7 +134,7 @@ done
 sleep 3
 
 # Sans ce contrôle, un refus de Gazebo passait inaperçu: la Room 315 s'affichait
-# mais le HC10, la plateforme et l'obstacle n'existaient pas, et l'échec ne se
+# mais le HC10, le TIAGo et l'obstacle n'existaient pas, et l'échec ne se
 # manifestait qu'en bout de chaîne (nuage filtré vide, puis MoveIt sans robot).
 spawn_model() {
   local name=$1
@@ -136,8 +174,12 @@ done
 
 spawn_model yaskawa_hc10_1 "$share/models/yaskawa_hc10.sdf" \
   'position: {x: -15.1622, y: -3.0, z: 0.62}, orientation: {z: 0.70710678, w: 0.70710678}'
-spawn_model mobile_pick_station "$share/models/mobile_pick_station.sdf" \
-  'position: {x: -14.1122, y: -3.0}, orientation: {z: 0.70710678, w: 0.70710678}'
+spawn_model tiago_delivery "$tiago_runtime_model" \
+  'position: {x: -14.1122, y: -5.15, z: 0.02}, orientation: {z: 0.70710678, w: 0.70710678}'
+spawn_model tiago_delivery_payload "$share/models/tiago_delivery_payload.sdf" \
+  'position: {x: -14.1122, y: -4.6}, orientation: {z: 0.70710678, w: 0.70710678}'
+ros2 run hc10_pick_place_demo tiago_delivery &
+delivery_pid=$!
 if [[ "${HC10_TEST_OBSTACLE:-1}" == "1" ]]; then
   # Milieu du segment A -> B, posé sur la table. Ce mur n'est déclaré qu'à
   # Gazebo : MoveIt doit le découvrir par la caméra RGB-D et l'OctoMap.
@@ -148,7 +190,7 @@ fi
 
 # Sur VMware, ouvrir la GUI avant que le serveur ait chargé la scène produit
 # parfois une fenêtre uniformément grise. Attendre ici garantit que le monde,
-# le robot, la plateforme et l'obstacle existent avant la première image.
+# le HC10, le TIAGo et l'obstacle existent avant la première image.
 if (( software_camera )); then
   gui_config=$(ros2 pkg prefix --share mfja_robot_control_config)/config/room315_runtime_safe.gui.config
   # Le pilote VMware non accéléré affiche brièvement la scène puis revient à

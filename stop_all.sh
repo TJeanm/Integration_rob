@@ -20,6 +20,7 @@ patterns=(
   'hc10_mfja_control_adapter'
   'hc10_pick_place_demo/(scripts/)?perception( |$)'
   'hc10_pick_place_demo/(scripts/)?pick_place( |$)'
+  'hc10_pick_place_demo/(scripts/)?tiago_delivery( |$)'
 )
 
 for signal in TERM KILL; do

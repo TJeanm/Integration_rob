@@ -28,18 +28,20 @@ from moveit_msgs.srv import GetPlanningScene
 from moveit_msgs.msg import PlanningSceneComponents
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64
-from std_srvs.srv import Empty
+from std_srvs.srv import Empty, Trigger
 from trajectory_msgs.msg import JointTrajectory
 from shape_msgs.msg import SolidPrimitive
 
 JOINTS = ['joint_1_s', 'joint_2_l', 'joint_3_u', 'joint_4_r', 'joint_5_b', 'joint_6_t']
 HOME = [0.0] * 6
 CONVEYOR = (-0.86, -0.212, 0.35)
-# Centre de la plateforme, dans le repère base_link du HC10.
-# Son plateau est à z≈0.06; le TCP reste volontairement bien au-dessus.
-PICK_POSITION = (0.0, -1.05, 0.27)
+# Centre du plateau porté par TIAGo, dans le repère base_link du HC10.
+# Le plateau est à z≈0.225 et le dessus du cube à z≈0.295 dans ce repère.
+# Le TCP descend à z=0.310 juste au-dessus du cube pour éviter toute fausse collision
+# d'interpénétration avec les voxels de l'OctoMap lors de la fermeture simulée.
+PICK_POSITION = (0.0, -1.05, 0.31)
 MIN_TCP_HEIGHT = 0.18
-PICK_CLEARANCE = 0.28
+PICK_CLEARANCE = 0.25
 CONVEYOR_CLEARANCE = 0.25
 
 
@@ -53,6 +55,8 @@ class Demo(Node):
         self.execution = ActionClient(self, ExecuteTrajectory, '/execute_trajectory')
         self.scene = self.create_client(GetPlanningScene, '/get_planning_scene')
         self.clear_octomap_client = self.create_client(Empty, '/clear_octomap')
+        self.tiago_ready_client = self.create_client(Trigger, '/hc10/tiago_ready')
+        self.tiago_depart_client = self.create_client(Trigger, '/hc10/tiago_depart')
         self.validity_client = self.create_client(GetStateValidity, '/check_state_validity')
         self.arm = self.create_publisher(
             JointTrajectory, '/yaskawa_hc10_1/joint_trajectory', 1
@@ -84,12 +88,36 @@ class Demo(Node):
                 self.validity_client.service_is_ready(),
             )
             if all(status):
+                break
+        else:
+            raise RuntimeError(
+                'Dépendances indisponibles '
+                '[joints, contrôleur, IK, FK, OMPL, cartésien, clear_octomap, validité] '
+                f'= {status}'
+            )
+        self.wait_for_tiago()
+
+    def wait_for_tiago(self):
+        if not self.tiago_ready_client.wait_for_service(timeout_sec=30.0):
+            raise RuntimeError('Service de livraison TIAGo indisponible')
+        deadline = time.monotonic() + 30.0
+        while time.monotonic() < deadline:
+            future = self.tiago_ready_client.call_async(Trigger.Request())
+            rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
+            if future.done() and future.result() is not None and future.result().success:
+                print('TIAGo à quai: démarrage du cycle HC10', flush=True)
                 return
-        raise RuntimeError(
-            'Dépendances indisponibles '
-            '[joints, contrôleur, IK, FK, OMPL, cartésien, clear_octomap, validité] '
-            f'= {status}'
-        )
+            time.sleep(0.25)
+        raise RuntimeError("TIAGo n'a pas atteint sa pose de livraison")
+
+    def release_tiago(self):
+        if not self.tiago_depart_client.wait_for_service(timeout_sec=5.0):
+            raise RuntimeError('Service de départ TIAGo indisponible')
+        future = self.tiago_depart_client.call_async(Trigger.Request())
+        rclpy.spin_until_future_complete(self, future, timeout_sec=5.0)
+        if not future.done() or future.result() is None or not future.result().success:
+            raise RuntimeError('Impossible de faire repartir TIAGo')
+        print('Départ du TIAGo déclenché', flush=True)
 
     def rebuild_octomap(self):
         """Discard voxels left by the previous cycle and wait for fresh RGB-D data."""
@@ -393,12 +421,12 @@ demo.rebuild_octomap()
 demo.require_octomap()
 point_a = (PICK_POSITION[0], PICK_POSITION[1], PICK_POSITION[2] + PICK_CLEARANCE)
 point_b = (CONVEYOR[0], CONVEYOR[1], CONVEYOR[2] + CONVEYOR_CLEARANCE)
-print(f'Point A au-dessus du centre de la plateforme: {point_a}')
+print(f'Point A au-dessus du plateau TIAGo: {point_a}')
 print(f'Point B au-dessus du convoyeur: {point_b}')
 
 demo.gripper(0.035)
 demo.plan_to(demo.ik(point_a), 'A')
-demo.vertical([PICK_POSITION], 'descente au-dessus de la plateforme')
+demo.vertical([PICK_POSITION], 'descente au-dessus du plateau TIAGo')
 demo.gripper(0.0)
 demo.vertical([point_a], 'remontée vers A')
 demo.plan_to(demo.ik(point_b), 'B')
@@ -406,6 +434,7 @@ demo.vertical([(CONVEYOR[0], CONVEYOR[1], max(CONVEYOR[2], MIN_TCP_HEIGHT))], 'd
 demo.gripper(0.035)
 demo.vertical([point_b], 'remontée depuis B')
 demo.plan_to(HOME, 'la position initiale')
+demo.release_tiago()
 
 print('CYCLE DE PINCE SIMULÉ ET TRAJECTOIRE ANTI-COLLISION TERMINÉS')
 demo.destroy_node()

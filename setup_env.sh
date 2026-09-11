@@ -23,9 +23,11 @@ if [[ -n "${MFJA_UNDERLAY:-}" ]]; then
   source "$MFJA_UNDERLAY/setup.bash"
 elif ! ros2 pkg prefix mfja_3rd_floor_bringup >/dev/null 2>&1; then
   for candidate in \
+    "$repo_dir/.mfja_underlay" \
     "${XDG_CACHE_HOME:-$HOME/.cache}/integration_rob/mfja_underlay/install" \
-    "$repo_dir/../hc10_ros2_ws/install" \
-    "$repo_dir/../mfja_3rd_floor_gz/install"
+    "$repo_dir/underlay/install" \
+    "$repo_dir/../mfja_3rd_floor_gz/install" \
+    "$repo_dir/../hc10_ros2_ws/install"
   do
     if [[ -f "$candidate/setup.bash" ]]; then
       source "$candidate/setup.bash"
@@ -37,6 +39,13 @@ elif ! ros2 pkg prefix mfja_3rd_floor_bringup >/dev/null 2>&1; then
   done
 fi
 
+# Configuration des chemins de ressources Gazebo pour garantir la résolution des modèles
+if ros2 pkg prefix mfja_3rd_floor_description >/dev/null 2>&1; then
+  mfja_models="$(ros2 pkg prefix --share mfja_3rd_floor_description)/models"
+  export GZ_SIM_RESOURCE_PATH="${GZ_SIM_RESOURCE_PATH:+${GZ_SIM_RESOURCE_PATH}:}$mfja_models"
+  export GZ_SIM_MODEL_PATH="${GZ_SIM_MODEL_PATH:+${GZ_SIM_MODEL_PATH}:}$mfja_models"
+fi
+
 if [[ ! -f "$repo_dir/install/setup.bash" ]]; then
   echo "Workspace non compilé. Exécuter depuis $repo_dir:" >&2
   echo "  ./auto_start.sh          # installation et compilation automatiques" >&2
@@ -44,5 +53,11 @@ if [[ ! -f "$repo_dir/install/setup.bash" ]]; then
   return 1
 fi
 source "$repo_dir/install/setup.bash"
+
+if ros2 pkg prefix hc10_pick_place_demo >/dev/null 2>&1; then
+  demo_models="$(ros2 pkg prefix --share hc10_pick_place_demo)/models"
+  export GZ_SIM_RESOURCE_PATH="${GZ_SIM_RESOURCE_PATH:+${GZ_SIM_RESOURCE_PATH}:}$demo_models"
+  export GZ_SIM_MODEL_PATH="${GZ_SIM_MODEL_PATH:+${GZ_SIM_MODEL_PATH}:}$demo_models"
+fi
 
 export INTEGRATION_ROB_ROOT="$repo_dir"

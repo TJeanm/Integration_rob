@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 project(hc10_pick_place_demo)
 find_package(ament_cmake REQUIRED)
-install(PROGRAMS scripts/perception scripts/pick_place DESTINATION lib/${PROJECT_NAME})
+install(PROGRAMS scripts/perception scripts/pick_place scripts/tiago_delivery DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY models DESTINATION share/${PROJECT_NAME})
 ament_package()

@@ -7,15 +7,16 @@ calcule les trajectoires à partir de l'OctoMap affichée dans RViz.
 
 La démonstration réalise le cycle suivant :
 
-1. rejoindre un point A au-dessus du centre de la plateforme mobile ;
-2. descendre verticalement et fermer la pince comme si un objet était saisi ;
-3. remonter verticalement ;
-4. rejoindre un point B au-dessus du convoyeur ;
-5. descendre verticalement et ouvrir la pince ;
-6. remonter puis revenir à la position initiale.
+1. faire avancer un TIAGo jusqu'à sa pose de livraison devant le HC10 ;
+2. reconstruire l'OctoMap avec le TIAGo et son plateau à quai ;
+3. rejoindre un point A au-dessus du centre du plateau ;
+4. descendre verticalement et fermer la pince comme si un objet était saisi ;
+5. remonter, rejoindre un point B au-dessus du convoyeur puis déposer ;
+6. revenir à la position initiale et faire repartir le TIAGo.
 
-Aucun cube n'est attaché artificiellement à la pince. L'ouverture et la
-fermeture sont simulées sans objet.
+Le petit objet rouge posé sur le plateau est visuel. Aucun cube n'est attaché
+artificiellement à la pince : l'ouverture et la fermeture sont simulées, comme
+dans la version précédente de la démonstration.
 
 ## Environnement validé
 
@@ -42,13 +43,15 @@ IK verticale + planification OMPL + trajets cartésiens
         │
         ▼
 Adaptateur FollowJointTrajectory ──────► robot HC10 dans Gazebo
+
+TIAGo + plateau ──► arrivée à quai ──► cycle HC10 ──► départ
 ```
 
 Les paquets ROS 2 du dépôt sont :
 
 - `hc10_mfja_control_adapter` : adaptation des commandes MoveIt vers Gazebo ;
 - `hc10_moveit_config` : URDF, SRDF, cinématique, OMPL, RViz et OctoMap ;
-- `hc10_pick_place_demo` : perception, plateforme et cycle de démonstration.
+- `hc10_pick_place_demo` : perception, livraison TIAGo et cycle de démonstration.
 
 ## Dépendance Room 315
 
@@ -68,9 +71,10 @@ exactement le même chemin d'installation. Un éventuel clone déposé dans
 Les scripts détectent l'underlay automatiquement sous l'un de ces chemins :
 
 ```text
+.mfja_underlay                                   (lien symbolique automatique dans le projet)
 ~/.cache/integration_rob/mfja_underlay/install   (créé par auto_start.sh)
-../hc10_ros2_ws/install
 ../mfja_3rd_floor_gz/install
+../hc10_ros2_ws/install
 ```
 
 Dans tous les autres cas, indiquer son chemin :
@@ -86,32 +90,50 @@ echo 'export MFJA_UNDERLAY=/chemin/vers/le/workspace_mfja/install' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-## Installation
+## Installation depuis 0 sur Ubuntu 24.04 LTS
 
-Installer les dépendances principales :
+### Méthode 1 — Script d'installation tout-en-un (recommandé)
+
+Sur une machine vierge avec Ubuntu 24.04, un seul script configure le dépôt officiel ROS 2 Jazzy, installe Gazebo Harmonic, MoveIt 2, les ponts ROS-Gazebo et toutes les dépendances :
+
+```bash
+git clone https://github.com/TJeanm/Integration_rob.git
+cd Integration_rob
+./install_ubuntu2404.sh
+```
+
+Ce script vérifie la distribution Noble, configure la clé officielle ROS 2, installe tous les paquets apt nécessaires, initialise `rosdep` et active `source /opt/ros/jazzy/setup.bash` dans `~/.bashrc`.
+
+### Méthode 2 — Installation manuelle des paquets apt
 
 ```bash
 sudo apt update
 sudo apt install -y \
+  build-essential \
+  cmake \
   git \
+  mesa-utils \
   python3-colcon-common-extensions \
   python3-rosdep \
   python3-numpy \
-  ros-jazzy-moveit \
+  python3-yaml \
+  python3-setuptools \
+  ros-jazzy-desktop \
   ros-jazzy-ros-gz \
   ros-jazzy-ros-gz-sim \
   ros-jazzy-ros-gz-bridge \
+  ros-jazzy-ros-gz-interfaces \
+  ros-jazzy-gz-ros2-control \
+  ros-jazzy-ros2-controllers \
+  ros-jazzy-moveit \
   ros-jazzy-sensor-msgs-py \
   ros-jazzy-tf2-ros \
   ros-jazzy-xacro \
   ros-jazzy-robot-state-publisher \
   ros-jazzy-joint-state-publisher \
-  ros-jazzy-rviz2
+  ros-jazzy-rviz2 \
+  gnome-terminal
 ```
-
-`python3-colcon-common-extensions`, `python3-numpy` et
-`ros-jazzy-sensor-msgs-py` sont indispensables : sans le premier aucun script ne
-compile, les deux autres sont importés par le nœud de perception.
 
 Initialiser `rosdep` une seule fois sur la machine :
 
@@ -120,32 +142,17 @@ sudo rosdep init
 rosdep update
 ```
 
-`auto_start.sh` s'arrête avec la marche à suivre si `rosdep` n'est pas
-initialisé. Pour passer outre lorsque toutes les dépendances sont déjà
-installées : `AUTO_SKIP_ROSDEP=1 ./auto_start.sh`.
-
-Cloner la branche de travail :
-
-```bash
-git clone --branch integration \
-  https://github.com/TJeanm/Integration_rob.git
-cd Integration_rob
-```
-
-Ce dépôt ne contient aucun sous-module : un clone simple suffit et donne un
-workspace complet.
-
-Installer les dépendances ROS du dépôt et compiler :
+### Compilation du projet
 
 ```bash
 source /opt/ros/jazzy/setup.bash
 if [ -n "${MFJA_UNDERLAY:-}" ]; then source "$MFJA_UNDERLAY/setup.bash"; fi
-rosdep install --from-paths src --ignore-src -r -y
+rosdep install --from-paths src --ignore-src -r -y --skip-keys "mfja_3rd_floor_bringup mfja_3rd_floor_description"
 colcon build --symlink-install
 ```
 
 Les scripts déterminent eux-mêmes le chemin du dépôt. Le projet peut être
-cloné ailleurs que dans `~/Desktop` et utilisé par n'importe quel utilisateur.
+cloné n'importe où et exécuté par n'importe quel utilisateur.
 
 ## Lancement — quatre terminaux
 
@@ -211,8 +218,9 @@ terminal avant la commande.
 ./gazebo.sh
 ```
 
-Attendre l'affichage de la Room 315, du HC10, du convoyeur et de la plateforme
-mobile.
+Attendre l'affichage de la Room 315, du HC10, du convoyeur et du TIAGo. Le
+TIAGo entre automatiquement dans la cellule avec son plateau, puis reste à
+quai jusqu'à la fin du cycle HC10.
 
 ### Terminal 2 — perception RGB-D
 
@@ -239,9 +247,9 @@ alors l'OctoMap utilisée par OMPL pour les contrôles de collision.
 ```
 
 Au début de chaque cycle, le script vide l'ancienne OctoMap, attend sa
-reconstruction depuis la caméra et vérifie que l'état initial du robot est
-valide. Cela permet de relancer `demo.sh` plusieurs fois sans conserver les
-voxels générés pendant le cycle précédent.
+reconstruction depuis la caméra après l'arrivée du TIAGo et vérifie que l'état
+initial du robot est valide. Cela permet de relancer `demo.sh` plusieurs fois
+sans conserver les voxels générés pendant le cycle précédent.
 
 Le cycle est terminé lorsque le terminal affiche :
 

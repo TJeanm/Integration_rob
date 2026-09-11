@@ -28,13 +28,26 @@ warn() {
   echo "ATTENTION: $*" >&2
 }
 
-[[ -f "$ros_setup" ]] || fail "ROS 2 introuvable: $ros_setup
-Installer ROS 2 ${ros_distro}, ou exporter ROS_DISTRO vers une distribution installée."
+if [[ ! -f "$ros_setup" ]]; then
+  warn "ROS 2 introuvable: $ros_setup"
+  if [[ -f "$repo_dir/install_ubuntu2404.sh" ]]; then
+    echo "Lancement de l'installation automatique des dépendances Ubuntu 24.04 (sudo requis)..."
+    "$repo_dir/install_ubuntu2404.sh"
+  fi
+  [[ -f "$ros_setup" ]] || fail "ROS 2 ${ros_distro} introuvable: $ros_setup. Exécuter ./install_ubuntu2404.sh manuellement."
+fi
 source "$ros_setup"
-command -v colcon >/dev/null \
-  || fail "colcon est absent (sudo apt install -y python3-colcon-common-extensions)"
-command -v ros2 >/dev/null || fail "ros2 est absent"
-command -v git >/dev/null || fail "git est absent (sudo apt install -y git)"
+
+missing_tools=()
+command -v colcon >/dev/null || missing_tools+=("python3-colcon-common-extensions")
+command -v git >/dev/null || missing_tools+=("git")
+command -v rosdep >/dev/null || missing_tools+=("python3-rosdep")
+command -v glxinfo >/dev/null || missing_tools+=("mesa-utils")
+if (( ${#missing_tools[@]} )); then
+  echo "Installation automatique des outils de développement manquants: ${missing_tools[*]}..."
+  sudo apt-get update -q && sudo apt-get install -y "${missing_tools[@]}"
+fi
+command -v ros2 >/dev/null || fail "ros2 est absent malgré le sourçage de $ros_setup"
 
 # --------------------------------------------------------------------------
 # Dépendances système
@@ -46,16 +59,15 @@ ensure_rosdep() {
     return
   fi
   if ! command -v rosdep >/dev/null; then
-    fail "rosdep est absent. Installer puis initialiser une seule fois:
-  sudo apt install -y python3-rosdep && sudo rosdep init && rosdep update
-ou relancer avec AUTO_SKIP_ROSDEP=1 si les dépendances sont déjà installées."
+    echo "Installation de python3-rosdep..."
+    sudo apt-get update -q && sudo apt-get install -y python3-rosdep
   fi
   if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
-    fail "rosdep n'est pas initialisé sur cette machine. Exécuter une seule fois:
-  sudo rosdep init && rosdep update
-puis relancer ./auto_start.sh (ou AUTO_SKIP_ROSDEP=1 ./auto_start.sh pour passer outre)."
+    echo "Initialisation de rosdep..."
+    sudo rosdep init || true
   fi
-  rosdep update >/dev/null 2>&1 || warn "'rosdep update' a échoué; utilisation du cache local."
+  echo "Mise à jour des sources rosdep..."
+  rosdep update --rosdistro "$ros_distro" >/dev/null 2>&1 || warn "'rosdep update' a émis un avertissement; utilisation du cache local."
   rosdep_usable=1
 }
 
@@ -79,8 +91,8 @@ check_runtime_modules() {
   python3 -c 'from sensor_msgs_py import point_cloud2' >/dev/null 2>&1 \
     || missing+=("ros-${ros_distro}-sensor-msgs-py")
   if (( ${#missing[@]} )); then
-    fail "modules Python manquants pour la perception RGB-D. Installer:
-  sudo apt install -y ${missing[*]}"
+    echo "Installation automatique des modules Python manquants: ${missing[*]}..."
+    sudo apt-get install -y "${missing[@]}"
   fi
 }
 
@@ -90,23 +102,58 @@ check_runtime_modules() {
 
 contains_room315() {
   local install_dir=$1
-  find "$install_dir" -maxdepth 6 -path \
+  find "$install_dir" -maxdepth 8 -path \
     '*/share/ament_index/resource_index/packages/mfja_3rd_floor_bringup' \
     -print -quit 2>/dev/null | grep -q .
 }
 
 find_underlay() {
   local candidate
+  # 1. Variable d'environnement explicite
   if [[ -n "${MFJA_UNDERLAY:-}" ]] && [[ -f "$MFJA_UNDERLAY/setup.bash" ]] \
       && contains_room315 "$MFJA_UNDERLAY"; then
     printf '%s\n' "$MFJA_UNDERLAY"
     return
   fi
+  # 2. Lien symbolique local du projet
+  if [[ -f "$repo_dir/.mfja_underlay/setup.bash" ]] \
+      && contains_room315 "$repo_dir/.mfja_underlay"; then
+    printf '%s\n' "$repo_dir/.mfja_underlay"
+    return
+  fi
+  # 3. Dossier underlay local au dépôt
+  if [[ -f "$repo_dir/underlay/install/setup.bash" ]] \
+      && contains_room315 "$repo_dir/underlay/install"; then
+    printf '%s\n' "$repo_dir/underlay/install"
+    return
+  fi
+  # 4. Cache standard
   candidate="$cache_root/mfja_underlay/install"
   if [[ -f "$candidate/setup.bash" ]] && contains_room315 "$candidate"; then
     printf '%s\n' "$candidate"
     return
   fi
+  # 5. Workspaces voisins habituels
+  for candidate in \
+    "$repo_dir/../mfja_3rd_floor_gz/install" \
+    "$repo_dir/../hc10_ros2_ws/install" \
+    "$repo_dir/../mfja_install"
+  do
+    if [[ -f "$candidate/setup.bash" ]] && contains_room315 "$candidate"; then
+      printf '%s\n' "$candidate"
+      return
+    fi
+  done
+  # 6. Recherche rapide dans le dossier parent
+  while IFS= read -r candidate; do
+    candidate=${candidate%/setup.bash}
+    if contains_room315 "$candidate"; then
+      printf '%s\n' "$candidate"
+      return
+    fi
+  done < <(find "$repo_dir/.." -maxdepth 4 -type f -path '*/install/setup.bash' \
+    -not -path "$repo_dir/*" -not -path '*/build/*' -not -path '*/log/*' 2>/dev/null)
+  # 7. Recherche bornée dans $HOME
   while IFS= read -r candidate; do
     candidate=${candidate%/setup.bash}
     if contains_room315 "$candidate"; then
@@ -120,11 +167,22 @@ find_underlay() {
 
 find_mfja_sources() {
   local package_file
-  # Un dépôt Room 315 déposé dans src/ est prioritaire sur le reste du HOME.
+  # 1. Dossier src interne
   if [[ -f "$repo_dir/src/mfja_3rd_floor_gz/mfja_3rd_floor_bringup/package.xml" ]]; then
     printf '%s\n' "$repo_dir/src/mfja_3rd_floor_gz"
     return
   fi
+  # 2. Dossier voisin
+  if [[ -f "$repo_dir/../mfja_3rd_floor_gz/mfja_3rd_floor_bringup/package.xml" ]]; then
+    printf '%s\n' "$repo_dir/../mfja_3rd_floor_gz"
+    return
+  fi
+  # 3. Cache sources
+  if [[ -f "$cache_root/sources/mfja_3rd_floor_gz/mfja_3rd_floor_bringup/package.xml" ]]; then
+    printf '%s\n' "$cache_root/sources/mfja_3rd_floor_gz"
+    return
+  fi
+  # 4. Recherche dans HOME
   package_file=$(find "$HOME" -maxdepth "$search_depth" -type f \
     -path '*/mfja_3rd_floor_bringup/package.xml' \
     -not -path '*/build/*' -not -path '*/install/*' -not -path '*/log/*' \
@@ -137,8 +195,13 @@ find_mfja_sources() {
 clone_mfja_sources() {
   local target=$1
   mkdir -p "$(dirname "$target")"
-  echo "Sources Room 315 absentes; clonage de $mfja_repo_url ($mfja_branch)..."
-  git clone --depth 1 --branch "$mfja_branch" "$mfja_repo_url" "$target"
+  if [[ -d "$target" ]] && [[ ! -d "$target/.git" ]]; then
+    rm -rf "$target"
+  fi
+  if [[ ! -d "$target" ]]; then
+    echo "Sources Room 315 absentes; clonage de $mfja_repo_url ($mfja_branch)..."
+    git clone --depth 1 --branch "$mfja_branch" "$mfja_repo_url" "$target"
+  fi
   [[ -n "$mfja_commit" ]] || return 0
   if git -C "$target" rev-parse --verify --quiet "${mfja_commit}^{commit}" >/dev/null \
       || git -C "$target" fetch --depth 1 origin "$mfja_commit" >/dev/null 2>&1; then
@@ -149,25 +212,15 @@ clone_mfja_sources() {
   fi
 }
 
-build_underlay() {
-  local source_root=$1
-  # Torch sert aux outils IA optionnels de Room 315. La simulation HC10,
-  # les caméras et les bridges ne l'utilisent pas; ne pas imposer ~1 Go de
-  # paquets ni une demande sudo inutile sur une machine vierge.
-  install_dependencies "$source_root" "python3-torch python3-torchvision"
-  echo "Compilation de l'underlay Room 315 depuis $source_root..."
-  mkdir -p "$cache_root/mfja_underlay"
-  colcon --log-base "$cache_root/mfja_underlay/log" build \
-    --base-paths "$source_root" \
-    --build-base "$cache_root/mfja_underlay/build" \
-    --install-base "$cache_root/mfja_underlay/install" \
-    --symlink-install
-}
-
 optimize_cached_rgbd() {
-  local source_model="$cache_root/sources/mfja_3rd_floor_gz/mfja_3rd_floor_description/models/room315_visual_observation_rig/model.sdf"
-  local installed_model="$cache_root/mfja_underlay/install/mfja_3rd_floor_description/share/mfja_3rd_floor_description/models/room315_visual_observation_rig/model.sdf"
-  [[ -f "$source_model" ]] || return 0
+  local source_root=${1:-}
+  local source_model=""
+  if [[ -n "$source_root" && -f "$source_root/mfja_3rd_floor_description/models/room315_visual_observation_rig/model.sdf" ]]; then
+    source_model="$source_root/mfja_3rd_floor_description/models/room315_visual_observation_rig/model.sdf"
+  elif [[ -f "$cache_root/sources/mfja_3rd_floor_gz/mfja_3rd_floor_description/models/room315_visual_observation_rig/model.sdf" ]]; then
+    source_model="$cache_root/sources/mfja_3rd_floor_gz/mfja_3rd_floor_description/models/room315_visual_observation_rig/model.sdf"
+  fi
+  [[ -n "$source_model" && -f "$source_model" ]] || return 0
   python3 - "$source_model" <<'PY'
 import sys
 import xml.etree.ElementTree as ET
@@ -189,12 +242,24 @@ for sensor in root.findall('.//sensor'):
         image.find('height').text = '120'
 tree.write(path, encoding='unicode', xml_declaration=True)
 PY
-  # Avec --symlink-install, le fichier installé pointe normalement vers la
-  # source. Couvrir aussi une installation copiée.
+  local installed_model="$cache_root/mfja_underlay/install/mfja_3rd_floor_description/share/mfja_3rd_floor_description/models/room315_visual_observation_rig/model.sdf"
   if [[ -f "$installed_model" ]] && [[ ! "$installed_model" -ef "$source_model" ]]; then
     cp "$source_model" "$installed_model"
   fi
-  echo "Profil RGB-D léger appliqué à l'underlay automatique."
+  echo "Profil RGB-D léger appliqué à la configuration caméra Room 315."
+}
+
+build_underlay() {
+  local source_root=$1
+  optimize_cached_rgbd "$source_root"
+  install_dependencies "$source_root" "python3-torch python3-torchvision plansys2_msgs plansys2_bringup plansys2_planner"
+  echo "Compilation de l'underlay Room 315 depuis $source_root..."
+  mkdir -p "$cache_root/mfja_underlay"
+  colcon --log-base "$cache_root/mfja_underlay/log" build \
+    --base-paths "$source_root" \
+    --build-base "$cache_root/mfja_underlay/build" \
+    --install-base "$cache_root/mfja_underlay/install" \
+    --symlink-install
 }
 
 ensure_rosdep
@@ -220,7 +285,10 @@ if [[ "$underlay" == "$cache_root/mfja_underlay/install" ]]; then
   optimize_cached_rgbd
 fi
 
-echo "Underlay Room 315: $underlay"
+# Créer un lien symbolique persistant dans le workspace pour setup_env.sh et les scripts autonomes
+ln -sfn "$underlay" "$repo_dir/.mfja_underlay"
+
+echo "Underlay Room 315: $underlay (lié vers $repo_dir/.mfja_underlay)"
 source "$underlay/setup.bash"
 ros2 pkg prefix mfja_3rd_floor_bringup >/dev/null \
   || fail "l'underlay trouvé ne contient pas mfja_3rd_floor_bringup"
@@ -231,7 +299,7 @@ ros2 pkg prefix mfja_3rd_floor_bringup >/dev/null \
 
 echo "Installation des dépendances et compilation du projet..."
 cd "$repo_dir"
-install_dependencies "$repo_dir/src"
+install_dependencies "$repo_dir/src" "mfja_3rd_floor_bringup mfja_3rd_floor_description"
 # Room 315 est toujours consommé comme underlay, jamais compilé dans ce
 # workspace: les deux chemins doivent rester identiques sur toutes les machines.
 colcon build --symlink-install --packages-ignore-regex '^mfja_' '^motoman_'
@@ -270,6 +338,14 @@ launch_terminal() {
   : > "$log_file"
   printf -v command 'set -o pipefail; export MFJA_UNDERLAY=%q; cd %q; %q 2>&1 | tee %q; code=${PIPESTATUS[0]}; echo; echo "Processus terminé (code $code)" | tee -a %q; exec bash' \
     "$underlay" "$repo_dir" "$script" "$log_file" "$log_file"
+
+  # Mode sans affichage graphique (serveur SSH, CI, container ou AUTO_HEADLESS=1)
+  if [[ "${AUTO_HEADLESS:-0}" == "1" ]] || [[ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    echo "Lancement en arrière-plan: $title (journal: $log_file)"
+    bash -lc "$command" &
+    return 0
+  fi
+
   if command -v gnome-terminal >/dev/null; then
     gnome-terminal --title="$title" -- bash -lc "$command"
   elif command -v konsole >/dev/null; then
@@ -281,8 +357,16 @@ launch_terminal() {
   elif command -v x-terminal-emulator >/dev/null; then
     x-terminal-emulator -T "$title" -e bash -lc "$command" &
   else
-    fail "aucun terminal graphique compatible n'est installé.
-Installer gnome-terminal ou xterm, ou lancer les quatre scripts à la main (voir readme.md)."
+    if command -v sudo >/dev/null; then
+      echo "Installation de gnome-terminal pour l'affichage des 4 terminaux..."
+      sudo apt-get update -q && sudo apt-get install -y gnome-terminal || true
+      if command -v gnome-terminal >/dev/null; then
+        gnome-terminal --title="$title" -- bash -lc "$command"
+        return 0
+      fi
+    fi
+    warn "Aucun terminal graphique compatible. Lancement en arrière-plan pour $title."
+    bash -lc "$command" &
   fi
 }
 

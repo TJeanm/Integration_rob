@@ -106,7 +106,7 @@ class Perception(Node):
             self.warn_throttled(
                 f'Nuage reçu mais aucun des {len(xyz)} points ne passe le filtre spatial. '
                 'La caméra ne voit probablement que le sol: vérifier que gazebo.sh a bien '
-                'créé yaskawa_hc10_1, mobile_pick_station et la table dans le monde.')
+                'créé yaskawa_hc10_1, tiago_delivery et la table dans le monde.')
             return
         if now - self.last_output_ns < OUTPUT_PERIOD_NS:
             return
