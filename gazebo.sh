@@ -134,7 +134,10 @@ fi
 # le robot, la plateforme et l'obstacle existent avant la première image.
 if (( software_camera )); then
   gui_config=$(ros2 pkg prefix --share mfja_robot_control_config)/config/room315_runtime_safe.gui.config
-  env -u LIBGL_ALWAYS_SOFTWARE gz sim -g --gui-config "$gui_config" &
+  # Le pilote VMware non accéléré affiche brièvement la scène puis revient à
+  # un fond gris. Garder Mesa logiciel pour cette seule fenêtre assure un
+  # rendu stable; la caméra allégée et le bridge unique limitent la charge.
+  LIBGL_ALWAYS_SOFTWARE=1 gz sim -g --gui-config "$gui_config" &
   gui_pid=$!
   echo "GUI Gazebo ouverte après chargement complet de la scène."
 fi
