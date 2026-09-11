@@ -2,6 +2,7 @@
 """Animate the Room 315 TIAGo delivery from the entrance door and expose hand-off services."""
 
 import math
+import os
 import threading
 import time
 
@@ -40,11 +41,31 @@ class TiagoDelivery(Node):
         self.arrived = False
         self.moving = False
         self.lock = threading.Lock()
-        self.timer = self.create_timer(1.0, self.start_arrival)
-        self.get_logger().info("TIAGo prêt à livrer depuis la porte d'entrée de la salle 315")
+
+        # Initialiser la pose à la porte dès que Gazebo est prêt
+        threading.Thread(target=self.init_door_pose, daemon=True).start()
+
+        # Démarrage automatique optionnel via variable d'environnement (ex: TIAGO_AUTO_START_DELAY=15)
+        # Par défaut, attend que pick_place / demo.sh appelle /hc10/tiago_ready afin de laisser
+        # le temps à Gazebo et RViz de s'afficher complètement.
+        auto_delay = float(os.environ.get('TIAGO_AUTO_START_DELAY', '0'))
+        if auto_delay > 0:
+            self.timer = self.create_timer(auto_delay, self.start_arrival)
+            self.get_logger().info(
+                f"TIAGo à la porte d'entrée, démarrage automatique dans {auto_delay}s")
+        else:
+            self.timer = None
+            self.get_logger().info(
+                "TIAGo positionné à la porte d'entrée (départ synchronisé avec demo.sh / /hc10/tiago_ready)")
+
+    def init_door_pose(self):
+        if self.pose_client.wait_for_service(timeout_sec=15.0):
+            time.sleep(0.5)
+            self.set_actor_poses(DOOR_X, AISLE_Y, math.pi, with_cube=True)
 
     def start_arrival(self):
-        self.timer.cancel()
+        if self.timer is not None:
+            self.timer.cancel()
         self.launch_move(True)
 
     def launch_move(self, arriving: bool):
@@ -103,19 +124,24 @@ class TiagoDelivery(Node):
                 self.get_logger().error('Service Gazebo set_pose indisponible')
                 return
 
-            dt = 0.06
+            dt = 0.08
 
             if arriving:
+                # Pause initiale pour que l'utilisateur visualise bien le TIAGo à la porte
+                self.get_logger().info(
+                    "TIAGo à la porte d'entrée de la salle 315. Départ vers le quai HC10 dans 2s...")
+                time.sleep(2.0)
+
                 # Étape 1 : Allée depuis la porte (X: DOOR_X -> CORNER_X, cap Ouest = pi)
-                steps_aisle = 40
+                steps_aisle = 65
                 for i in range(steps_aisle + 1):
                     r = smoothstep(i / steps_aisle)
                     x = DOOR_X + (CORNER_X - DOOR_X) * r
                     self.set_actor_poses(x, AISLE_Y, math.pi, with_cube=True)
                     time.sleep(dt)
 
-                # Étape 2 : Virage de 90° vers le Sud (theta: pi -> 3*pi/2 = -pi/2)
-                steps_turn = 20
+                # Étape 2 : Virage fluide de 90° vers le Sud (theta: pi -> 3*pi/2 = -pi/2)
+                steps_turn = 25
                 for i in range(steps_turn + 1):
                     r = smoothstep(i / steps_turn)
                     theta = math.pi + r * (math.pi / 2.0)
@@ -123,7 +149,7 @@ class TiagoDelivery(Node):
                     time.sleep(dt)
 
                 # Étape 3 : Entrée dans la cellule jusqu'au quai (Y: AISLE_Y -> DOCK_Y, cap Sud = -pi/2)
-                steps_dock = 25
+                steps_dock = 35
                 for i in range(steps_dock + 1):
                     r = smoothstep(i / steps_dock)
                     y = AISLE_Y + (DOCK_Y - AISLE_Y) * r
@@ -133,8 +159,9 @@ class TiagoDelivery(Node):
                 self.arrived = True
                 self.get_logger().info("TIAGo à quai depuis la porte d'entrée, pièce disponible")
             else:
+                time.sleep(1.0)
                 # Étape 1 : Sortie de la cellule (Y: DOCK_Y -> AISLE_Y)
-                steps_exit = 25
+                steps_exit = 35
                 for i in range(steps_exit + 1):
                     r = smoothstep(i / steps_exit)
                     y = DOCK_Y + (AISLE_Y - DOCK_Y) * r
@@ -142,7 +169,7 @@ class TiagoDelivery(Node):
                     time.sleep(dt)
 
                 # Étape 2 : Virage vers l'Est (theta: -pi/2 -> 0)
-                steps_turn = 20
+                steps_turn = 25
                 for i in range(steps_turn + 1):
                     r = smoothstep(i / steps_turn)
                     theta = -math.pi / 2.0 + r * (math.pi / 2.0)
@@ -150,7 +177,7 @@ class TiagoDelivery(Node):
                     time.sleep(dt)
 
                 # Étape 3 : Retour vers la porte (X: CORNER_X -> DOOR_X, cap Est = 0)
-                steps_aisle = 40
+                steps_aisle = 65
                 for i in range(steps_aisle + 1):
                     r = smoothstep(i / steps_aisle)
                     x = CORNER_X + (DOOR_X - CORNER_X) * r

@@ -116,14 +116,15 @@ class Demo(Node):
     def wait_for_tiago(self):
         if not self.tiago_ready_client.wait_for_service(timeout_sec=30.0):
             raise RuntimeError('Service de livraison TIAGo indisponible')
-        deadline = time.monotonic() + 30.0
+        print("Attente de l'arrivée du TIAGo depuis la porte d'entrée...", flush=True)
+        deadline = time.monotonic() + 60.0
         while time.monotonic() < deadline:
             future = self.tiago_ready_client.call_async(Trigger.Request())
             rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
             if future.done() and future.result() is not None and future.result().success:
                 print('TIAGo à quai: démarrage du cycle HC10', flush=True)
                 return
-            time.sleep(0.25)
+            time.sleep(0.5)
         raise RuntimeError("TIAGo n'a pas atteint sa pose de livraison")
 
     def release_tiago(self):
