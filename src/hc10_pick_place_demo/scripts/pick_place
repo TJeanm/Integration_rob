@@ -27,6 +27,7 @@ from moveit_msgs.srv import (
 )
 from rclpy.node import Node
 from rclpy.action import ActionClient
+from rclpy.qos import qos_profile_sensor_data
 from moveit_msgs.action import ExecuteTrajectory
 from moveit_msgs.srv import GetPlanningScene
 from moveit_msgs.msg import PlanningSceneComponents
@@ -71,7 +72,7 @@ class Demo(Node):
         )
         self.display = self.create_publisher(DisplayTrajectory, '/display_planned_path', 1)
         self.joint_subscription = self.create_subscription(
-            JointState, '/yaskawa_hc10_1/joint_states', self.states.append, 1
+            JointState, '/yaskawa_hc10_1/joint_states', self.states.append, qos_profile_sensor_data
         )
         self.cube_subscription = self.create_subscription(
             PoseStamped, '/hc10/detected_cube_pose', self.on_cube_pose, 1
@@ -95,7 +96,7 @@ class Demo(Node):
             rclpy.spin_once(self, timeout_sec=0.1)
             status = (
                 bool(self.states),
-                self.arm.get_subscription_count() > 0,
+                self.execution.server_is_ready(),
                 self.ik_client.service_is_ready(),
                 self.fk_client.service_is_ready(),
                 self.plan_client.service_is_ready(),
@@ -108,7 +109,7 @@ class Demo(Node):
         else:
             raise RuntimeError(
                 'Dépendances indisponibles '
-                '[joints, contrôleur, IK, FK, OMPL, cartésien, clear_octomap, validité] '
+                '[joints, exécution, IK, FK, OMPL, cartésien, clear_octomap, validité] '
                 f'= {status}'
             )
         self.wait_for_tiago()

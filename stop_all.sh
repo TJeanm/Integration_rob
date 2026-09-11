@@ -30,4 +30,6 @@ for signal in TERM KILL; do
   [[ "$signal" == TERM ]] && sleep 2
 done
 
+ros2 daemon stop >/dev/null 2>&1 || true
+
 echo "Anciennes instances Gazebo, perception, MoveIt et RViz arrêtées."
