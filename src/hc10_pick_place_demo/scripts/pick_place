@@ -222,12 +222,32 @@ class Demo(Node):
         constraints.position_constraints = [constraint]
         return constraints
 
+    def is_state_valid(self, positions):
+        request = GetStateValidity.Request()
+        request.group_name = 'manipulator'
+        request.robot_state.joint_state.name = JOINTS
+        request.robot_state.joint_state.position = positions
+        future = self.validity_client.call_async(request)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=3)
+        if future.done() and future.result() is not None:
+            if not future.result().valid:
+                contacts = [
+                    f'{c.contact_body_1} / {c.contact_body_2}'
+                    for c in future.result().contacts
+                ]
+                return False, contacts
+            return True, []
+        return True, []
+
     def ik(self, xyz, seed=None):
         seeds = [seed] if seed is not None else [
-            self.start_positions(),
             HOME,
+            [-1.7, 0.8, 2.2, 0.0, -1.6, 1.7],
             [-1.57, 0.5, 1.0, 0.0, 1.0, 0.0],
+            [0.0, 0.5, 1.5, 0.0, -1.0, 0.0],
+            self.start_positions(),
         ]
+        fallback_solution = None
         for attempt, candidate in enumerate(seeds, 1):
             request = GetPositionIK.Request()
             ik = request.ik_request
@@ -242,19 +262,8 @@ class Demo(Node):
             pose.orientation.w = 0.0
             ik.robot_state.joint_state.name = JOINTS
             ik.robot_state.joint_state.position = candidate
-            # IK only computes a vertical tool pose. Collision checking belongs
-            # to OMPL / Cartesian planning below, both fed by MoveIt's OctoMap.
-            # Asking KDL to check the raw cloud here rejects valid goals before
-            # a collision-aware trajectory can even be planned.
             ik.avoid_collisions = False
             ik.timeout.sec = 3
-            print(
-                f'IK essai {attempt}: frame={ik.pose_stamped.header.frame_id} '
-                f'groupe={ik.group_name} link={ik.ik_link_name} xyz={xyz} '
-                f'quaternion=(x={pose.orientation.x}, y={pose.orientation.y}, '
-                f'z={pose.orientation.z}, w={pose.orientation.w}) seed={list(candidate)}',
-                flush=True,
-            )
             future = self.ik_client.call_async(request)
             rclpy.spin_until_future_complete(self, future, timeout_sec=5)
             if not future.done():
@@ -264,16 +273,31 @@ class Demo(Node):
             if response is None:
                 print(f'IK essai {attempt}: réponse absente', flush=True)
                 continue
-            print(f'IK essai {attempt}: code MoveIt={response.error_code.val}', flush=True)
-            if response is not None and response.error_code.val == 1:
+            if response.error_code.val == 1:
                 solution = dict(zip(
                     response.solution.joint_state.name,
                     response.solution.joint_state.position,
                 ))
                 result = [solution[name] for name in JOINTS]
                 self.verify_fk(result, xyz)
-                return result
-        raise RuntimeError(f'IK impossible pour {xyz}')
+                valid, contacts = self.is_state_valid(result)
+                if valid:
+                    print(f'IK solution validée sans collision (essai {attempt})', flush=True)
+                    return result
+                print(
+                    f'IK solution essai {attempt} en collision avec la scène: {contacts}, essai suivant...',
+                    flush=True,
+                )
+                if fallback_solution is None:
+                    fallback_solution = result
+
+        if fallback_solution is not None:
+            print(
+                'Attention: aucune solution IK exempte de collision trouvée, utilisation du repli',
+                flush=True,
+            )
+            return fallback_solution
+        raise RuntimeError(f'Aucune solution IK trouvée pour xyz={xyz}')
 
     def verify_fk(self, joints, expected_xyz):
         request = GetPositionFK.Request()
